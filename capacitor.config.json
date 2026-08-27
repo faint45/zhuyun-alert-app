@@ -1,0 +1,13 @@
+{
+  "appId": "net.zhewei.fangzai",
+  "appName": "築雲預警",
+  "webDir": "www",
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    },
+    "PushNotifications": {
+      "presentationOptions": ["alert", "sound", "badge"]
+    }
+  }
+}

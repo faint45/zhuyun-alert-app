@@ -1,0 +1,1956 @@
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>築雲預警 · 築未科技</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0d1526">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<style>
+:root{--bg:#060a14;--panel:#0d1526;--panel2:#131c30;--line:#1f2c47;--fg:#e8f0ff;--muted:#8aa0c8;--cyan:#00e5ff;--amber:#ffb300;--red:#ff3b5c;--green:#2fe0a0;--orange:#ff7a2f}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:var(--bg);color:var(--fg);font-family:"Noto Sans TC","PingFang TC",sans-serif;overflow:hidden;user-select:none}
+#map{position:absolute;inset:0;background:#0a0f1c}
+.leaflet-container{background:#0a0f1c}
+.lyr{background:rgba(13,21,38,.85);border:1px solid var(--line);color:var(--muted);
+     border-radius:14px;padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer;
+     backdrop-filter:blur(6px);white-space:nowrap}
+.lyr.on{color:#fff;border-color:var(--cyan);box-shadow:0 0 12px rgba(0,229,255,.35)}
+#top{position:fixed;top:0;left:0;right:0;z-index:1200;padding:calc(env(safe-area-inset-top) + 10px) 14px 10px;display:flex;align-items:center;gap:10px;background:linear-gradient(180deg,rgba(6,10,20,.92),rgba(6,10,20,0));pointer-events:none}
+#top>*{pointer-events:auto}
+.logo{font-size:17px;font-weight:800;letter-spacing:1px}
+.logo b{color:var(--cyan)}
+.logo small{display:block;font-size:9px;color:var(--muted);font-weight:400;letter-spacing:0}
+#levelChip{padding:5px 12px;border-radius:20px;font-size:12px;font-weight:700;background:var(--panel);border:1px solid var(--line)}
+#levelChip.ok{color:var(--green);border-color:var(--green)}
+#levelChip.warn{color:var(--amber);border-color:var(--amber)}
+#levelChip.bad{color:var(--red);border-color:var(--red);animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+#nav{position:fixed;bottom:0;left:0;right:0;z-index:1500;display:flex;background:rgba(13,21,38,.92);backdrop-filter:blur(14px);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+#nav button{flex:1;background:none;border:none;color:var(--muted);padding:10px 0 8px;font-size:11px;display:flex;flex-direction:column;align-items:center;gap:3px;transition:.15s}
+#nav button.on{color:var(--cyan)}
+#nav button .ic{font-size:21px}
+#sos{position:fixed;right:16px;bottom:calc(env(safe-area-inset-bottom) + 86px);z-index:1300;width:62px;height:62px;border-radius:50%;background:radial-gradient(circle at 30% 30%,#ff6b85,var(--red));border:2px solid #fff3;color:#fff;font-size:13px;font-weight:900;box-shadow:0 6px 24px rgba(255,59,92,.55);animation:beat 2s infinite}
+@keyframes beat{0%,100%{transform:scale(1)}12%{transform:scale(1.1)}24%{transform:scale(1)}}
+/* 面板原本 z-index:1400 蓋過導覽列(1200) 且 bottom:0 直接壓在上面——
+   實機實測（Pixel 10 Pro Fold）：只要開啟任何面板，底部導覽列就完全點不到，
+   使用者得先按 ✕ 才能切分頁。防災 App 尤其不能這樣：看天氣時想快速切到回報
+   或按 SOS 會發現點不動。導覽列改為浮在面板之上(1500)，面板則往上讓出
+   導覽列高度。 */
+.panel{position:fixed;z-index:1400;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:0 10px 40px rgba(0,0,0,.6)}
+#sheet,#sosSheet,#weatherSheet,#cctvAiSheet,#alertSheet,#meSheet{margin-bottom:calc(62px + env(safe-area-inset-bottom))}
+#sheet{left:0;right:0;bottom:0;border-radius:22px 22px 0 0;padding:20px 16px calc(env(safe-area-inset-bottom) + 16px);max-height:72vh;overflow:auto;display:none}
+#sheet.show{display:block}
+#sheet h2{font-size:17px;margin-bottom:12px}
+.typegrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.typegrid button{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 4px;color:var(--fg);font-size:12px;display:flex;flex-direction:column;align-items:center;gap:4px}
+.typegrid button.sel{border-color:var(--cyan);background:rgba(0,229,255,.1)}
+.typegrid .ic{font-size:22px}
+textarea,input[type=text]{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--fg);padding:10px;font-size:14px;margin-bottom:10px}
+.btn{width:100%;padding:13px;border-radius:12px;border:none;font-size:15px;font-weight:800;background:var(--cyan);color:#04121a;cursor:pointer}
+.btn.danger{background:var(--red);color:#fff}
+.btn.ghost{background:var(--panel2);color:var(--fg);border:1px solid var(--line)}
+#overlay{position:fixed;inset:0;z-index:1350;background:rgba(4,6,12,.55);display:none}
+#overlay.show{display:block}
+.legend{position:fixed;left:12px;top:calc(env(safe-area-inset-top) + 58px);z-index:1100;background:rgba(13,21,38,.9);border:1px solid var(--line);border-radius:12px;padding:8px 10px;font-size:11px;color:var(--muted);backdrop-filter:blur(8px)}
+.legend div{margin:3px 0}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}
+.pop{font-size:13px;line-height:1.5}
+.pop b{color:var(--cyan)}
+.pop img{width:100%;border-radius:8px;margin-top:6px}
+.hidden{display:none!important}
+.cctv-box{margin-top:6px}
+.cctv-box img{width:100%;border-radius:8px;border:1px solid var(--line)}
+.cctv-box a{display:block;font-size:11px;color:var(--cyan);margin-top:4px;text-decoration:none}
+.src-list{font-size:11px;color:var(--muted);line-height:1.8}
+.src-list b{color:var(--cyan)}
+.src-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:var(--panel2);margin-bottom:6px}
+.src-item .st{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.st.on{background:var(--green)}.st.off{background:var(--muted)}
+.update-box{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+.update-box .ver{font-size:12px;color:var(--cyan);font-weight:700}
+.update-box .desc{font-size:12px;color:var(--muted);margin-top:4px}
+.watermark{position:fixed;bottom:calc(env(safe-area-inset-bottom) + 58px);left:14px;z-index:1100;font-size:10px;color:rgba(138,160,200,.3);pointer-events:none}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="top">
+  <div class="logo">科技<b>防災</b><small>築未科技 Zhewei Tech</small></div>
+  <div id="levelChip" class="ok">連線中…</div>
+</div>
+<div class="legend">
+  <div><span class="dot" style="background:#ff3b5c"></span>已確認災情</div>
+  <div><span class="dot" style="background:#ffb300"></span>AI 待確認</div>
+  <div><span class="dot" style="background:#ff7a2f"></span>群眾回報</div>
+  <div><span class="dot" style="background:#00e5ff"></span>我的位置</div>
+  <div><span class="dot" style="background:#2fe0a0"></span>避難收容處所</div>
+</div>
+<div class="watermark">© 築未科技 · 築雲預警</div>
+
+<!-- 圖層控制：風場粒子 / 衛星雲圖動畫 -->
+<div id="layerCtl" style="position:absolute;top:12px;right:12px;z-index:1000;display:flex;flex-direction:column;gap:6px">
+  <button id="btnWind" class="lyr on">💨 風場</button>
+  <button id="btnCloudAnim" class="lyr">☁️ 雲圖動畫</button>
+  <div id="cloudTime" style="font-size:10px;color:var(--muted);text-align:right"></div>
+</div>
+
+<button id="sos">🚨<br>SOS</button>
+<div id="overlay"></div>
+
+<!-- 回報表單 -->
+<div id="sheet" class="panel">
+  <h2>📸 回報災情</h2>
+  <div class="typegrid" id="typegrid"></div>
+  <div style="display:flex;gap:8px;margin-bottom:10px">
+    <button class="btn ghost" id="btnShot" style="width:50%">📷 拍照</button>
+    <button class="btn ghost" id="btnGallery" style="width:50%">🖼️ 相簿</button>
+  </div>
+  <img id="prev" class="hidden" style="width:100%;max-height:160px;object-fit:cover;border-radius:10px;margin-bottom:10px">
+  <input type="file" id="fileInput" accept="image/*" class="hidden">
+  <textarea id="desc" rows="2" placeholder="描述現況（選填）…"></textarea>
+  <div style="font-size:11px;color:var(--muted);margin-bottom:10px" id="gpsLine">📍 定位中…</div>
+  <button class="btn" id="btnSubmit">送出回報</button>
+  <button class="btn ghost" id="btnCancel" style="margin-top:8px">取消</button>
+</div>
+
+<!-- SOS 表單 -->
+<div id="sosSheet" class="panel" style="left:0;right:0;bottom:0;border-radius:22px 22px 0 0;display:none;max-height:60vh">
+  <h2>🚨 緊急求救</h2>
+  <textarea id="sosMsg" rows="3" placeholder="我需要協助…（例：我在XX路，水淹進屋了）"></textarea>
+  <input type="text" id="sosContact" placeholder="聯絡電話（讓救援者聯絡你）">
+  <div style="font-size:11px;color:var(--muted);margin-bottom:10px" id="sosGps">📍 定位中…</div>
+  <button class="btn danger" id="btnSosSend">🚨 發送求救（含定位）</button>
+  <!-- 送達狀態：求救是生死攸關的動作，絕不能讓使用者以為送出了而其實沒有 -->
+  <div id="sosStatus" style="display:none;margin-top:10px;border-radius:12px;padding:12px;font-size:12px;line-height:1.7"></div>
+  <label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;color:var(--muted)"><input type="checkbox" id="sosTest" style="accent-color:var(--cyan)">🧪 這是測試（不會觸發實際救援）</label>
+  <button class="btn ghost" id="btnSosCancel" style="margin-top:8px">取消</button>
+</div>
+
+<!-- 天氣分頁（蘋果天氣風格：先看「我家現在怎樣」） -->
+<div id="weatherSheet" class="panel" style="left:0;right:0;bottom:0;border-radius:22px 22px 0 0;display:none;max-height:80vh;overflow:hidden;padding:0">
+  <div style="padding:18px 16px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between">
+    <h2 style="font-size:17px;margin:0">🌤️ 我家這裡</h2>
+    <button class="btn ghost" id="btnWeatherClose" style="width:auto;padding:6px 14px;margin:0">✕</button>
+  </div>
+  <div id="weatherContent" style="overflow:auto;max-height:calc(80vh - 70px);padding:16px">
+    <div style="text-align:center;color:var(--muted);padding:30px">載入中…</div>
+  </div>
+</div>
+
+<!-- CCTV AI 分頁（純地圖：掃到誰亮誰，下方顯示截圖） -->
+<div id="cctvAiSheet" class="panel" style="left:0;right:0;bottom:0;border-radius:22px 22px 0 0;display:none;max-height:80vh;overflow:hidden;padding:0">
+  <div style="padding:18px 16px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between">
+    <h2 style="font-size:17px;margin:0">🤖 CCTV AI 即時掃描</h2>
+    <button class="btn ghost" id="btnCctvAiClose" style="width:auto;padding:6px 14px;margin:0">✕</button>
+  </div>
+  <div id="cctvAiContent" style="overflow:auto;max-height:calc(80vh - 70px);padding:0">
+    <div style="text-align:center;color:var(--muted);padding:30px">載入中…</div>
+  </div>
+</div>
+
+<!-- 警報分頁 -->
+<div id="alertSheet" class="panel" style="left:0;right:0;bottom:0;border-radius:22px 22px 0 0;display:none;max-height:80vh;overflow:hidden;padding:0">
+  <div style="padding:18px 16px 12px;border-bottom:1px solid var(--line)">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <h2 style="font-size:17px;margin:0">🔔 災害示警</h2>
+      <button class="btn ghost" id="btnAlertClose" style="width:auto;padding:6px 14px;margin:0">✕</button>
+    </div>
+    <div id="alertLevel" style="margin-top:8px;font-size:13px;color:var(--muted)">讀取中…</div>
+  </div>
+  <div id="alertList" style="overflow:auto;max-height:calc(80vh - 100px);padding:12px 16px"></div>
+</div>
+
+<!-- 我的分頁 -->
+<div id="meSheet" class="panel" style="left:0;right:0;bottom:0;border-radius:22px 22px 0 0;display:none;max-height:80vh;overflow:hidden;padding:0">
+  <div style="padding:18px 16px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between">
+    <h2 style="font-size:17px;margin:0">👤 我的</h2>
+    <button class="btn ghost" id="btnMeClose" style="width:auto;padding:6px 14px;margin:0">✕</button>
+  </div>
+  <div style="overflow:auto;max-height:calc(80vh - 70px);padding:16px">
+    <div style="font-size:13px;font-weight:700;margin-bottom:8px">📍 關注地區</div>
+    <div id="subGrid" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px"></div>
+    <div style="font-size:10px;color:var(--amber);margin-bottom:16px">⚠️ 目前推播為全台廣播，地區篩選尚未上線——選取只影響地圖預設顯示，不會減少你收到的通知</div>
+    <div style="font-size:13px;font-weight:700;margin-bottom:8px">🔔 推播通知</div>
+    <button class="btn" id="btnPushToggle" style="margin-bottom:6px">推播：開啟</button>
+    <!-- 這裡原本寫死「需 Firebase 金鑰」，下面又用 ✅ 列出「目前推播項目」，
+         兩句互相矛盾——而且兩句都不準：沒有 FCM 時會走 ntfy 兜底，照樣收得到。
+         改成由 initPush() 回填實際生效的管道。 -->
+    <div id="pushChannel" style="font-size:11px;color:var(--muted);margin-bottom:6px">推播管道：偵測中…</div>
+    <div id="pushItems" style="font-size:11px;color:var(--muted);margin-bottom:16px"></div>
+
+    <div style="font-size:13px;font-weight:700;margin-bottom:8px">🛣️ 預設關注道路</div>
+    <div style="background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:16px;font-size:12px;color:var(--muted);line-height:1.8">
+      <div>🛣️ 國道（高速公路）— 即時路況・事件・CCTV</div>
+      <div>🚗 快速道路 — 路況・封閉・施工</div>
+      <div>📍 省道 — 即時資訊・CCTV 影像</div>
+      <div style="color:var(--cyan);margin-top:4px">以上道路已預設關注，有事件會即時推播。</div>
+    </div>
+
+    <div style="font-size:13px;font-weight:700;margin-bottom:8px">📋 我的回報</div>
+    <div id="myReports" style="font-size:12px;color:var(--muted);margin-bottom:16px">載入中…</div>
+
+    <div style="font-size:13px;font-weight:700;margin-bottom:8px">📡 資料來源</div>
+    <div class="src-list" id="srcList" style="margin-bottom:16px">
+      <div class="src-item"><span class="st on"></span>中央氣象署（CWA）— 雨量・預報・特報・颱風</div>
+      <div class="src-item"><span class="st on"></span>經濟部水利署（WRA）— 河川水位・淹水感測・警戒值</div>
+      <div class="src-item"><span class="st on"></span>交通部 TDX — 國道・省道路況・CCTV 即時影像</div>
+      <div class="src-item"><span class="st on"></span>國家災害防救科技中心（NCDR）— 60 種民生示警</div>
+      <div class="src-item"><span class="st on"></span>內政部消防署 — 全台避難收容處所 5973 筆</div>
+      <div class="src-item"><span class="st on"></span>NVIDIA Earth-2 — AI 2km 天氣預報（FourCastNet+CorrDiff）</div>
+      <div class="src-item"><span class="st on"></span>群眾協作 — 災情回報・照片・GPS 定位</div>
+    </div>
+
+    <div style="font-size:13px;font-weight:700;margin-bottom:8px">💬 更多內容・建議回饋</div>
+    <div style="background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:16px">
+      <div style="font-size:13px;margin-bottom:8px">追蹤我們取得最新防災資訊、功能更新預告、災害應變知識</div>
+      <a href="https://www.threads.com/@faint34556" target="_blank" style="display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--fg);font-size:14px;font-weight:700;padding:10px 14px;border-radius:10px;background:rgba(0,229,255,.08);border:1px solid var(--cyan)">
+        <span style="font-size:22px">🧵</span>
+        <span>Threads @faint34556</span>
+        <span style="margin-left:auto;color:var(--cyan)">前往 →</span>
+      </a>
+      <div style="margin-top:10px;font-size:12px;color:var(--muted)">有建議或發現問題？歡迎到 Threads 私訊或留言，我們會持續改進。</div>
+      <button class="btn ghost" id="btnFeedback" style="margin-top:10px;width:auto;padding:8px 16px;font-size:13px">📝 寄信建議</button>
+    </div>
+
+    <div style="font-size:13px;font-weight:700;margin-bottom:8px">🔄 軟體更新</div>
+    <div class="update-box" id="updateBox">
+      <div class="ver">築雲預警 v0.4 — 最新版本</div>
+      <div class="desc">檢查更新中…</div>
+      <button class="btn ghost" id="btnCheckUpdate" style="margin-top:8px;width:auto;padding:8px 16px">檢查更新</button>
+    </div>
+
+    <div style="font-size:13px;font-weight:700;margin-bottom:8px">🤝 聯名推廣單位</div>
+    <div id="partnerList" style="margin-bottom:16px"></div>
+
+    <div style="font-size:13px;font-weight:700;margin-bottom:8px">🔒 隱私與條款</div>
+    <a href="privacy.html" target="_blank" style="display:block;text-decoration:none;color:var(--fg);font-size:13px;padding:10px 14px;border-radius:10px;background:var(--panel2);border:1px solid var(--line);margin-bottom:16px">
+      隱私權政策 <span style="color:var(--muted);font-size:11px">— 我們收集什麼資料、誰看得到、怎麼刪除</span>
+    </a>
+
+    <div id="appFooterVer" style="font-size:11px;color:var(--muted);text-align:center;padding-top:10px;border-top:1px solid var(--line);margin-top:10px">
+      <b style="color:var(--cyan)">築未科技有限公司</b> Zhewei Tech Co., Ltd.<br>
+      築雲預警 · 免費提供全台使用<br>
+      © 2026 Zhewei Tech. All rights reserved.
+    </div>
+  </div>
+</div>
+
+<nav id="nav" style="overflow-x:auto;white-space:nowrap">
+  <button class="on" data-tab="map"><span class="ic">🗺️</span>地圖</button>
+  <button data-tab="weather"><span class="ic">🌤️</span>天氣</button>
+  <button data-tab="cctvai"><span class="ic">🤖</span>CCTV AI</button>
+  <button data-tab="report"><span class="ic">📸</span>回報</button>
+  <button data-tab="alert"><span class="ic">🔔</span>警報</button>
+  <button data-tab="me"><span class="ic">👤</span>我的</button>
+</nav>
+
+<!-- 功能引導（首次開啟）-->
+<div id="onboard" style="position:fixed;inset:0;z-index:2000;background:rgba(4,6,12,.92);display:none;flex-direction:column;align-items:center;justify-content:center;padding:30px 24px;backdrop-filter:blur(10px)">
+  <div id="onboardPages" style="display:none">
+    <div class="ob-page" data-i="0" style="text-align:center;display:none">
+      <div style="font-size:52px;margin-bottom:16px">🗺️</div>
+      <h2 style="font-size:22px;margin-bottom:10px;color:var(--cyan)">歡迎使用築雲預警</h2>
+      <p style="font-size:14px;color:var(--muted);line-height:1.8;max-width:300px">全台第一支整合「政府災害資料 + AI 天氣預報 + 群眾協作」的免費防災 App</p>
+      <div style="display:flex;gap:6px;justify-content:center;margin-top:20px;font-size:11px;color:var(--muted)"><span>📊 氣象署</span><span>💧 水利署</span><span>🛣️ TDX</span><span>⚠️ NCDR</span></div>
+    </div>
+    <div class="ob-page" data-i="1" style="text-align:center;display:none">
+      <div style="font-size:48px;margin-bottom:16px">📸</div>
+      <h2 style="font-size:20px;margin-bottom:10px;color:var(--cyan)">災情回報</h2>
+      <p style="font-size:14px;color:var(--muted);line-height:1.8;max-width:300px">拍照 → 選擇災害類型（水災／火災／車禍／封閉／土石流）→ GPS 自動定位 → 送出<br>你的回報會即時顯示在地圖上，供全台使用者看到</p>
+    </div>
+    <div class="ob-page" data-i="2" style="text-align:center;display:none">
+      <div style="font-size:48px;margin-bottom:16px">🚨</div>
+      <h2 style="font-size:20px;margin-bottom:10px;color:var(--red)">緊急求救 SOS</h2>
+      <p style="font-size:14px;color:var(--muted);line-height:1.8;max-width:300px">任何畫面都能按右下角紅色按鈕<br>一鍵發送 GPS 定位＋求救訊息<br>附近使用者會即時收到通知</p>
+    </div>
+    <div class="ob-page" data-i="3" style="text-align:center;display:none">
+      <div style="font-size:48px;margin-bottom:16px">🔔</div>
+      <h2 style="font-size:20px;margin-bottom:10px;color:var(--amber)">災害示警</h2>
+      <p style="font-size:14px;color:var(--muted);line-height:1.8;max-width:300px">整合 NCDR 60 種政府示警<br>淹水・土石流・道路封閉・堰塞湖<br>在「我的」訂閱你關心的縣市，有災情即時推播</p>
+    </div>
+    <div class="ob-page" data-i="4" style="text-align:center;display:none">
+      <div style="font-size:48px;margin-bottom:16px">🏠</div>
+      <h2 style="font-size:20px;margin-bottom:10px;color:var(--green)">避難收容處所</h2>
+      <p style="font-size:14px;color:var(--muted);line-height:1.8;max-width:300px">地圖自動顯示附近避難所（全台 5973 筆）<br>點擊標記查看地址、容納人數、距離<br>災時可快速導航前往</p>
+    </div>
+  </div>
+  <div id="obDots" style="display:flex;gap:8px;margin-bottom:24px"></div>
+  <div style="display:flex;gap:10px;width:100%;max-width:300px">
+    <button class="btn ghost" id="btnObSkip" style="width:40%">跳過</button>
+    <button class="btn" id="btnObNext" style="width:60%">下一步</button>
+  </div>
+  <div style="margin-top:20px;font-size:10px;color:rgba(138,160,200,.4)">© 築未科技 · 築雲預警</div>
+</div>
+
+<!-- CCTV 播放器 overlay -->
+<div id="cctvOverlay" style="position:fixed;inset:0;z-index:2500;background:rgba(0,0,0,.95);display:none;flex-direction:column;align-items:center;justify-content:center">
+  <div style="position:absolute;top:calc(env(safe-area-inset-top) + 10px);right:14px">
+    <button class="btn ghost" id="btnCctvClose" style="width:auto;padding:6px 14px;margin:0">✕ 關閉</button>
+  </div>
+  <div id="cctvTitle" style="color:#fff;font-size:15px;font-weight:700;margin-bottom:10px"></div>
+  <img id="cctvImg" style="max-width:100%;max-height:75vh;border-radius:12px;border:1px solid var(--line)">
+  <div style="color:var(--muted);font-size:11px;margin-top:8px">📍 即時影像 · 每 10 秒自動更新</div>
+</div>
+
+<script src="vendor/leaflet/leaflet.js"></script>
+<script>
+// ═══ 防篡改保護 ═══
+// ⚠️ 這個常數必須跟 android/app/build.gradle 的 versionName 手動同步。
+// 它曾經停在 '0.4' 沒跟著改，而伺服器版本已經到 0.7——導致每次開 App
+// 3 秒後都判定「發現新版本」並觸發自動下載重裝，浪費流量又擾民。
+// 沒有接 @capacitor/app 外掛讀取真實安裝版本前，這裡就是唯一事實來源，
+// 每次 versionCode/versionName 調整都要同步改這裡。
+const APP_VERSION='1.6';
+const APP_VENDOR='築未科技';
+const API = localStorage.getItem('fz_api') || 'https://app.zhe-wei.net';
+const API_HASH = 'zhewei-tech-fangzai-2026'; // 簽章常量
+
+// 這裡曾經寫死一把 X-API-Key 給所有請求帶上。那把金鑰隨 APK 公開下載，
+// 任何人解開就拿得到，擋不住任何人——只是讓我們誤以為有保護。
+// 後端已把公民端寫入（回報/求救/驗證/推播註冊）改成不要金鑰、改用限流防濫用；
+// 金鑰只留給不對外散布的內部服務（cctv_cascade、ESP32 感測盒）。
+// 這裡改帶 X-Device-Id，讓後端能以裝置為單位限流。
+function getDeviceId(){
+  let id = localStorage.getItem('fz_device_id');
+  if(!id){ id = (crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random()); localStorage.setItem('fz_device_id', id); }
+  return id;
+}
+
+// ── 預計算快照：先問 CDN，讀不到才打即時 API ──────────────────
+// 後端每 10 分鐘把全台 1300+ 個測站的答案先算好寫成靜態檔。使用者只要在本地
+// 找出最近的測站，再抓那一支 400 多 bytes 的檔案就好——源站零運算，而且全台
+// 使用者抓的是同一批檔案，CDN 邊緣快取一次就能服務所有人。
+// 索引 83KB 但幾乎不變，快取一天；答案檔 5 分鐘。
+let _snapIndex = null;
+async function snapIndex(){
+  if(_snapIndex) return _snapIndex;
+  const cached = JSON.parse(localStorage.getItem('fz_snap_index')||'null');
+  if(cached && (Date.now()-cached.at) < 86400000){ _snapIndex = cached.d; return _snapIndex; }
+  try{
+    const d = await (await fetch(API+'/snap/index.json')).json();
+    _snapIndex = d;
+    try{ localStorage.setItem('fz_snap_index', JSON.stringify({at:Date.now(), d})); }catch(e){}
+    return d;
+  }catch(e){ return null; }
+}
+function nearestStation(idx, lat, lon){
+  if(!idx || !idx.stations || !idx.stations.length) return null;
+  let best=null, bd=Infinity;
+  for(const st of idx.stations){
+    // 平面近似夠用：只是要挑最近的一站，不是要精確距離
+    const dy=(st[1]-lat), dx=(st[2]-lon)*Math.cos(lat*Math.PI/180);
+    const d=dy*dy+dx*dx;
+    if(d<bd){ bd=d; best=st; }
+  }
+  return best;
+}
+// 回傳跟 /api/v1/local 同形狀的物件，呼叫端不必分辨資料哪裡來的
+async function localConditions(lat, lon){
+  try{
+    const idx = await snapIndex();
+    const st = nearestStation(idx, lat, lon);
+    if(st){
+      const d = await (await fetch(API+`/snap/s/${st[0]}.json`)).json();
+      if(d && d.level!==undefined){
+        return {...d, place: (d.county||'')+(d.town||''), in_taiwan:true, source:'snapshot'};
+      }
+    }
+  }catch(e){ /* 落到即時 API */ }
+  try{
+    const d = await fetchJSON(API+`/api/v1/local?lat=${lat}&lon=${lon}`);
+    return {...d, source:'live'};
+  }catch(e){ return null; }
+}
+
+// 統一 fetch：timeout + 裝置識別
+async function _fetch(url, opts={}, ms=12000){
+  const c = new AbortController();
+  const t = setTimeout(()=>c.abort(), ms);
+  const headers = {'X-Device-Id': getDeviceId(), ...(opts.headers||{})};
+  try{
+    const r = await fetch(url, {...opts, headers, signal:c.signal});
+    if(r.status===429){ toast('⏳ 動作太頻繁，請稍後再試','urgent'); }
+    return r;
+  }
+  finally{ clearTimeout(t); }
+}
+async function fetchJSON(url, opts={}, ms=12000){
+  return (await _fetch(url, opts, ms)).json();
+}
+
+// 簡易竄改偵測：檢查關鍵值是否被改
+Object.defineProperty(window,'__zhewei__',{value:API_HASH,writable:false,configurable:false});
+
+// 防止外部 iframe 嵌入
+if(window.top!==window.self){document.body.innerHTML='此應用程式禁止嵌入';throw new Error('禁止嵌入')}
+
+const TYPES = [
+  {k:'flood', l:'🌊 水災', c:'#3b9eff'},
+  {k:'fire', l:'🔥 火災', c:'#ff3b5c'},
+  {k:'accident', l:'🚗 車禍', c:'#ffb300'},
+  {k:'road_closure', l:'⛔ 封閉', c:'#b44bff'},
+  {k:'landslide', l:'⛰️ 土石流', c:'#c47f3b'},
+  {k:'emergency', l:'🚨 緊急', c:'#ff5c8a'},
+  {k:'other', l:'📌 其他', c:'#8aa0c8'},
+];
+let selType='flood', myPos=null, photoData=null, sosPos=null;
+
+const map = L.map('map',{zoomControl:false,preferCanvas:true}).setView([23.6,121],8);
+L.control.zoom({position:'bottomleft'}).addTo(map);
+// 雙圖層：衛星（線上）+ NLSC EMAP7（離線優先）
+const NLSC_EMAP7='https://wmts.nlsc.gov.tw/wmts/EMAP7/default/EPSG:3857/{z}/{y}/{x}.png';
+// 離線圖磚層：先查 IndexedDB（preDownloadTiles 存的），沒有才 fetch 網路。
+// 原本 preDownloadTiles 有下載但從未被讀取——地圖一直用標準 L.tileLayer，離線時整片空白。
+const OfflineTileLayer = L.TileLayer.extend({
+  createTile(coords, done){
+    const img = document.createElement('img');
+    const key = `${coords.z}/${coords.x}/${coords.y}`;
+    const useNet = ()=>{ img.src=this.getTileUrl(coords); img.onload=()=>done(null,img); img.onerror=e=>done(e,img); };
+    openTileDB().then(db=>{
+      if(!db){ useNet(); return; }
+      try{
+        const req = db.transaction('tiles','readonly').objectStore('tiles').get(key);
+        req.onsuccess = ()=>{
+          if(req.result && req.result.b){
+            img.src = URL.createObjectURL(new Blob([req.result.b]));
+            done(null, img);
+          } else useNet();
+        };
+        req.onerror = useNet;
+      }catch(e){ useNet(); }
+    }).catch(useNet);
+    return img;
+  }
+});
+new OfflineTileLayer(NLSC_EMAP7,{maxZoom:14,opacity:.85,attribution:'© 內政部 NLSC EMAP7'}).addTo(map);
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:18,attribution:'© 築未科技',opacity:0}).addTo(map);
+
+// ── 衛星雲圖底圖（中央氣象署 Himawari 真實色影像）──
+// CWA 原圖是 Lambert 圓錐投影（不是 Mercator——2026-08-27 量格線實測），
+// 後端已重投影成 Web Mercator 再給我們，這裡直接用後端的 url+bounds 線性
+// 疊圖就會對齊。若看到格線歪斜=CWA 改版，要回報後端重新校準。
+// 放在 overlayPane：蓋在地形圖之上、災情標記之下。
+let cloudOverlay=null, cloudFrames=[], cloudIdx=0, cloudAnimTimer=null;
+async function loadCloudBasemap(){
+  try{
+    const d=await fetchJSON(API+'/api/v1/weather');
+    const s=d.satellite||{};
+    if(!s.url||!s.bounds)return;
+    cloudFrames=(s.frames||[]).map(f=>f.url);
+    cloudIdx=Math.max(0,cloudFrames.length-1);
+    const b=L.latLngBounds(s.bounds[0],s.bounds[1]);
+    if(cloudOverlay){map.removeLayer(cloudOverlay);cloudOverlay=null;}
+    cloudOverlay=L.imageOverlay(s.url,b,{opacity:.9,interactive:false}).addTo(map);
+    const el=document.getElementById('cloudTime');
+    if(el&&s.frames&&s.frames.length)el.textContent='☁️ '+s.frames[s.frames.length-1].time;
+  }catch(e){}
+}
+// 雲圖動畫：循環播放最近 12 幀
+function toggleCloudAnim(){
+  if(cloudAnimTimer){clearInterval(cloudAnimTimer);cloudAnimTimer=null;
+    if(cloudFrames.length&&cloudOverlay)cloudOverlay.setUrl(cloudFrames[cloudFrames.length-1]);
+    return false;}
+  if(cloudFrames.length<2)return false;
+  cloudAnimTimer=setInterval(()=>{
+    cloudIdx=(cloudIdx+1)%cloudFrames.length;
+    if(cloudOverlay)cloudOverlay.setUrl(cloudFrames[cloudIdx]);
+  },400);
+  return true;
+}
+loadCloudBasemap();
+setInterval(loadCloudBasemap, 300000);   // 每 5 分鐘更新一次雲圖
+
+// ── 風場粒子動畫（Earth-2 850hPa 風場）──────────────
+// 自製 canvas 圖層，不依賴 CDN 套件：本 App 是離線優先設計，外部相依會在斷網時失效。
+const WindLayer = L.Layer.extend({
+  initialize(grid, opts){ this._g=grid; this._o=Object.assign({n:1800,maxAge:70,speed:.35},opts||{}); },
+  onAdd(map){
+    this._map=map;
+    this._c=L.DomUtil.create('canvas','wind-canvas');
+    this._c.style.cssText='position:absolute;pointer-events:none;z-index:200';
+    map.getPanes().overlayPane.appendChild(this._c);
+    map.on('moveend zoomend resize',this._reset,this);
+    this._reset(); this._run();
+  },
+  onRemove(map){
+    cancelAnimationFrame(this._raf);
+    map.off('moveend zoomend resize',this._reset,this);
+    if(this._c&&this._c.parentNode)this._c.parentNode.removeChild(this._c);
+  },
+  _reset(){
+    const m=this._map, sz=m.getSize(), tl=m.containerPointToLayerPoint([0,0]);
+    L.DomUtil.setPosition(this._c,tl);
+    this._c.width=sz.x; this._c.height=sz.y;
+    this._ctx=this._c.getContext('2d');
+    this._parts=[];
+    for(let i=0;i<this._o.n;i++)this._parts.push(this._spawn());
+  },
+  _spawn(){
+    const b=this._map.getBounds();
+    return {lat:b.getSouth()+Math.random()*(b.getNorth()-b.getSouth()),
+            lon:b.getWest()+Math.random()*(b.getEast()-b.getWest()),
+            age:Math.random()*this._o.maxAge};
+  },
+  // 雙線性內插：把 21x17 稀疏網格變成連續風場
+  _uv(lat,lon){
+    const g=this._g, la=g.lat, lo=g.lon;
+    const desc=la[0]>la[la.length-1];
+    let i=-1;
+    for(let k=0;k<la.length-1;k++){
+      const a=la[k],b=la[k+1];
+      if((desc&&lat<=a&&lat>=b)||(!desc&&lat>=a&&lat<=b)){i=k;break;}
+    }
+    let j=-1;
+    for(let k=0;k<lo.length-1;k++){ if(lon>=lo[k]&&lon<=lo[k+1]){j=k;break;} }
+    if(i<0||j<0)return null;
+    const fy=(lat-la[i])/(la[i+1]-la[i]), fx=(lon-lo[j])/(lo[j+1]-lo[j]);
+    const bl=(M)=>M[i][j]*(1-fx)*(1-fy)+M[i][j+1]*fx*(1-fy)+M[i+1][j]*(1-fx)*fy+M[i+1][j+1]*fx*fy;
+    return [bl(g.u),bl(g.v)];
+  },
+  _run(){
+    const ctx=this._ctx; if(!ctx)return;
+    const m=this._map, o=this._o;
+    // 半透明黑覆蓋 → 形成拖尾
+    ctx.globalCompositeOperation='destination-in';
+    ctx.fillStyle='rgba(0,0,0,0.92)';
+    ctx.fillRect(0,0,this._c.width,this._c.height);
+    ctx.globalCompositeOperation='source-over';
+    ctx.lineWidth=1.2;
+    for(const p of this._parts){
+      const uv=this._uv(p.lat,p.lon);
+      if(!uv||p.age>o.maxAge){Object.assign(p,this._spawn());p.age=0;continue;}
+      const [u,v]=uv;
+      const nlat=p.lat+v*o.speed*0.02, nlon=p.lon+u*o.speed*0.02/Math.cos(p.lat*Math.PI/180);
+      const a=m.latLngToContainerPoint([p.lat,p.lon]), b=m.latLngToContainerPoint([nlat,nlon]);
+      const sp=Math.hypot(u,v);
+      // 依風速上色：青 → 黃 → 橘 → 紅
+      ctx.strokeStyle = sp>25?'rgba(255,59,92,.95)' : sp>15?'rgba(255,157,0,.9)'
+                      : sp>8 ?'rgba(255,224,80,.85)' : 'rgba(0,229,255,.75)';
+      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+      p.lat=nlat; p.lon=nlon; p.age++;
+    }
+    this._raf=requestAnimationFrame(()=>this._run());
+  },
+});
+
+let windLayer=null;
+async function loadWindField(){
+  try{
+    const d=await fetchJSON(API+'/api/v1/weather');
+    const fr=((d.fields||{}).frames||[])[0];
+    if(!fr||!fr.u850)return false;
+    const grid={lat:fr.lat,lon:fr.lon,u:fr.u850,v:fr.v850};
+    if(windLayer){map.removeLayer(windLayer);windLayer=null;}
+    windLayer=new WindLayer(grid); map.addLayer(windLayer);
+    return true;
+  }catch(e){ return false; }
+}
+function toggleWind(){
+  if(windLayer){map.removeLayer(windLayer);windLayer=null;return false;}
+  loadWindField(); return true;
+}
+
+// 圖層控制列
+$('btnWind').onclick=()=>{ $('btnWind').classList.toggle('on', toggleWind()); };
+$('btnCloudAnim').onclick=()=>{ $('btnCloudAnim').classList.toggle('on', toggleCloudAnim()); };
+loadWindField();          // 預設開啟風場（視覺主打）
+
+// 離線圖磚管理：IndexedDB 預下載
+const TILE_DB='fangzai-tiles';
+function openTileDB(){return new Promise((res,ok)=>{const r=indexedDB.open(TILE_DB,1);r.onupgradeneeded=e=>{e.target.result.createObjectStore('tiles',{keyPath:'key'});};r.onsuccess=e=>res(e.target.result);r.onerror=e=>ok(null);});}
+async function cacheTile(z,x,y){
+  const db=await openTileDB();if(!db)return;
+  const key=`${z}/${x}/${y}`;
+  try{
+    const tx=db.transaction('tiles','readwrite');
+    const r=await fetch(`${NLSC_EMAP7.replace('{z}',z).replace('{x}',x).replace('{y}',y)}`);
+    if(r.ok){const b=await r.arrayBuffer();tx.objectStore('tiles').put({key,b});}
+  }catch(e){}
+}
+async function preDownloadTiles(){
+  const cnt=JSON.parse(localStorage.getItem('fz_tiles_ready')||'{}');
+  if(cnt.count&&Date.now()-cnt.at<7*86400000)return;
+  const zooms=[6,7,8,9];
+  const tiles=[];
+  // 台灣範圍 (z=6: x=52-55, y=23-24)
+  for(const z of zooms){
+    let range;
+    if(z===6) range=[52,55,23,24];
+    else if(z===7) range=[105,110,46,49];
+    else if(z===8) range=[211,221,93,98];
+    else if(z===9) range=[423,443,186,196];
+    else range=[0,0,0,0];
+    for(let x=range[0];x<=range[1];x++)for(let y=range[2];y<=range[3];y++)tiles.push([z,x,y]);
+  }
+  toast(`📦 預下載 ${tiles.length} 張離線地圖（背景執行）`);
+  let i=0;
+  for(const [z,x,y] of tiles){cacheTile(z,x,y);i++;if(i%50===0)await new Promise(r=>setTimeout(r,100));}
+  localStorage.setItem('fz_tiles_ready',JSON.stringify({count:tiles.length,at:Date.now()}));
+  toast('✅ 離線地圖下載完成');
+}
+// 離線偵測
+window.addEventListener('online',()=>{toast('✅ 已恢復連線');document.body.classList.remove('offline');});
+window.addEventListener('offline',()=>{toast('⚠️ 離線模式（使用快取資料）','urgent');document.body.classList.add('offline');});
+if(!navigator.onLine) document.body.classList.add('offline');
+let myMarker=null, reportLayer=L.layerGroup().addTo(map), govLayer=L.layerGroup().addTo(map), shelterLayer=L.layerGroup(), cctvLayer=L.layerGroup().addTo(map);
+function $(id){return document.getElementById(id)}
+function toast(m){let t=document.createElement('div');t.textContent=m;t.style.cssText='position:fixed;left:50%;top:14%;transform:translateX(-50%);z-index:2000;background:#0d1526;border:1px solid var(--line);color:#fff;padding:10px 18px;border-radius:20px;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.5)';document.body.appendChild(t);setTimeout(()=>t.remove(),2200)}
+
+// Google Play「使用者生成內容」政策要求要有事後檢舉機制——回報預設直接
+// 公開發布、沒有事前審核，靠這個補上。同一則點第二次不重送，避免手滑洗版。
+async function flagReport(id, el){
+  if(el && el.dataset.flagged) return;
+  try{
+    await _fetch(API+'/api/v1/reports/'+id+'/flag',{method:'POST'});
+    toast('🚩 已收到檢舉，感謝協助把關');
+    if(el){ el.dataset.flagged='1'; el.textContent='已檢舉'; el.style.pointerEvents='none'; }
+  }catch(e){ toast('❌ 檢舉失敗，請稍後再試'); }
+}
+
+// 定位
+function locate(){
+  // 優先走 Capacitor Geolocation 插件（App 內），fallback 到 HTML5（網頁版）
+  const applyPos = (lat, lon) => {
+    myPos=[lat,lon];
+    if(myMarker)myMarker.remove();
+    myMarker=L.marker(myPos).addTo(map);
+    L.circle(myPos,{radius:10000,color:'#00e5ff',weight:1,fillOpacity:.05}).addTo(map);
+    $('gpsLine').textContent='📍 '+lat.toFixed(4)+', '+lon.toFixed(4);
+    refreshPushLocation();   // 定位好了就把位置補給推播註冊
+    $('sosGps').textContent='📍 '+lat.toFixed(4)+', '+lon.toFixed(4);
+    sosPos=myPos;
+    fitDisasterBounds();
+  };
+  const fail = ()=>{ $('gpsLine').textContent='📍 定位失敗，可用全台視角'; $('sosGps').textContent='📍 定位失敗（仍可發送）'; };
+
+  // 先試拿上次已知位置(秒回,室內也有值),失敗再用即時定位
+  const tryCurrent = () => {
+    try{
+      if(window.Capacitor?.Plugins?.Geolocation && typeof Capacitor.Plugins.Geolocation.getCurrentPosition === 'function'){
+        // enableHighAccuracy:false → 用 fused/network 混合,室內也定得到;25 秒給 network 定位足夠時間
+        Capacitor.Plugins.Geolocation.getCurrentPosition({enableHighAccuracy:false, timeout:25000}).then(pos=>{
+          if(pos && pos.coords){ applyPos(pos.coords.latitude, pos.coords.longitude); }
+          else if(!myPos){ fail(); }   // 已有位置就不覆蓋
+        }).catch(()=>{ if(!myPos){ fail(); } });  // 即時定位失敗但已有 lastKnown,不覆蓋
+      } else if(navigator.geolocation){
+        navigator.geolocation.getCurrentPosition(p=>applyPos(p.coords.latitude,p.coords.longitude), ()=>{ if(!myPos) fail(); }, {enableHighAccuracy:false, timeout:25000});
+      } else { fail(); }
+    }catch(e){ if(!myPos){ fail(); } }
+  };
+
+  // 1) 先試 last known location(秒回,不依賴 GPS 衛星)
+  try{
+    if(window.Capacitor?.Plugins?.Geolocation && typeof Capacitor.Plugins.Geolocation.getLastKnownLocation === 'function'){
+      Capacitor.Plugins.Geolocation.getLastKnownLocation().then(pos=>{
+        if(pos && pos.coords && pos.coords.latitude){
+          applyPos(pos.coords.latitude, pos.coords.longitude);
+          setTimeout(tryCurrent, 1500);
+        } else { tryCurrent(); }
+      }).catch(tryCurrent);
+    } else { tryCurrent(); }
+  }catch(e){ tryCurrent(); }
+}
+
+// 全台災情地圖（含群眾回報 + NCDR 政府示警 + 避難所 + CCTV + 道路事件）
+async function loadReports(){
+  reportLayer.clearLayers(); govLayer.clearLayers(); cctvLayer.clearLayers(); shelterLayer.clearLayers();
+  // 群眾回報（全台）
+  try{
+    const r = await (await _fetch(API+'/api/v1/reports')).json();
+    r.forEach(x=>{
+      const t=TYPES.find(t=>t.k===x.type)||TYPES[6];
+      const m=L.marker([x.lat,x.lon],{icon:L.divIcon({className:'',html:`<div style="width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${t.c};border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.5)"></div>`,iconSize:[30,30],iconAnchor:[15,28]})}).addTo(reportLayer);
+      let desc=(x.description||x.address||'').replace(/<[^>]+>/g,'').substring(0,200);
+      let html=`<div class="pop"><b>${t.l}</b> <span style="color:#8aa0c8;font-size:11px">${(x.time||'').slice(5,16)}</span><br>${desc}`;
+      if(x.photo){const src=x.photo.startsWith('http')?x.photo:(API+x.photo);html+=`<img src="${src}" onerror="this.style.display='none'">`;}
+      html+=`<br><span style="font-size:10px;color:var(--muted)">來源：群眾回報</span>`+
+            `<span style="float:right"><a href="javascript:void(0)" onclick="flagReport(${x.id},this)" style="font-size:10px;color:var(--muted);text-decoration:underline">🚩 檢舉不當內容</a></span></div>`;
+      m.bindPopup(html);
+    });
+  }catch(e){}
+
+  // NCDR 政府示警（全台，有座標的）
+  try{
+    const n=await(await _fetch(API+'/api/v1/ncdr')).json();
+    (n.high_alert||[]).forEach(e=>{
+      if(e.lat==null||e.lon==null)return;
+      const icMap={flood:['🌊','#0091ff'],landslide:['⛰️','#8a6d3b'],road_closure:['⛔','#ff3b5c'],
+                   reservoir:['💧','#00e5ff'],wind:['💨','#ff9d00'],rain:['🌧️','#4a9eff'],
+                   accident:['🚧','#ff6b35'],fire:['🔥','#ff3b5c']};
+      const [ic,color]=icMap[e.type]||['⚠️','#ff9d00'];
+      // 非精確座標畫成半透明虛線圈，避免誤導成確切位置。
+      // area=縣市級(9km 圈)、town=鄉鎮級(3km 圈，後端從「高雄市六龜區」
+      // 這類文字敘述定位出鄉鎮中心)——鄉鎮級比縣市級準一個量級，圈也小一級。
+      const isArea = e.locate==='area' || e.locate==='town';
+      if(isArea){
+        L.circle([e.lat,e.lon],{radius:e.locate==='town'?3000:9000,color:color,weight:1.5,dashArray:'6 5',
+          fillColor:color,fillOpacity:.10}).addTo(govLayer);
+      }
+      const size = isArea?28:34;
+      const m=L.marker([e.lat,e.lon],{icon:L.divIcon({className:'',html:`<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:${isArea?15:19}px;box-shadow:0 0 0 3px ${color}40,0 0 16px ${color}cc;border:2px ${isArea?'dashed':'solid'} #fff;opacity:${isArea?.85:1}">${ic}</div>`,iconSize:[size,size],iconAnchor:[size/2,size/2]})}).addTo(govLayer);
+      const where = e.area_desc?`<br>📍 ${e.area_desc}`:'';
+      const acc = e.locate==='town'
+        ? `<br><span style="font-size:10px;color:var(--amber)">📍 鄉鎮級概略位置（由文字敘述定位）</span>`
+        : isArea
+        ? `<br><span style="font-size:10px;color:var(--amber)">⚠️ 區域級位置（僅知縣市，非確切地點）</span>`
+        : `<br><span style="font-size:10px;color:var(--cyan)">✓ 精確座標</span>`;
+      m.bindPopup(`<div class="pop"><b>${e.title}</b>（政府示警）${where}<br>${e.summary||''}${acc}<br><span style="font-size:10px;color:var(--muted)">來源：NCDR 國家災害防救科技中心</span></div>`);
+    });
+  }catch(e){}
+
+  // TDX 道路消息 + CCTV（全台）
+  try{
+    const t=await(await _fetch(API+'/api/v1/tdx')).json();
+    // CCTV 全台（最多 50 支）
+    (t.cctv_nearest||[]).slice(0,50).forEach(c=>{
+      // 缺座標就不畫，不猜工地座標當預設值
+      if(!c.lat||!c.lon) return;
+      const clat=c.lat, clon=c.lon;
+      const isFW=(c.id||'').startsWith('CCTV-1');
+      const m=L.circleMarker([clat,clon],{radius:5,color:'#00e5ff',fillColor:'#0d1526',fillOpacity:.8,weight:2}).addTo(cctvLayer);
+      const safeUrl=c.url?c.url.replace(/'/g,"\\'").replace(/"/g,"&quot;"):'';
+      const dkm = myPos ? (Math.hypot(clat-myPos[0], (clon-myPos[1])*Math.cos(myPos[0]*Math.PI/180))*111).toFixed(1)+' km' : null;
+      m.bindPopup(`<div class="pop"><b>📹 ${isFW?'國道':'省道'} CCTV</b><br>${c.id||''}${dkm?`<br>距你 ${dkm}`:''}<div class="cctv-box"><img src="${safeUrl}" style="width:100%;border-radius:8px;margin-top:6px" onerror="this.style.display='none'" onload="clearTimeout(this.dataset.to)" data-to="1"><button class="btn ghost" style="margin-top:6px;width:auto;padding:6px 12px;font-size:12px" onclick="window.openCCTV('${safeUrl}')">▶ 在 App 內播放</button></div><br><span style="font-size:10px;color:var(--muted)">來源：交通部 TDX</span></div>`);
+    });
+    // 道路事件（封閉/事故/施工）。原本這裡的政策是「不標隨機座標」
+    // ——因為舊版根本沒有真實座標可用。後端現在會從「台X線…○○至××路段」
+    // 的句型解析出地名並查真實座標，解析不出來的就不給座標；有座標的才畫，
+    // 沒座標的就繼續交給警報分頁純文字呼現。寧可少標，不可標錯。
+    (t.news||[]).filter(n=>n.lat&&n.lon).slice(0,12).forEach(n=>{
+      const lvl = n.locate==='county' ? '縣市級' : '鄉鎮級';
+      const m2=L.marker([n.lat,n.lon],{icon:L.divIcon({className:'',html:`<div style="font-size:18px">⚠️</div>`,iconSize:[22,22],iconAnchor:[11,11]})}).addTo(cctvLayer);
+      m2.bindPopup(`<div class="pop"><b>⚠️ ${n.title||'道路事件'}</b><br>${n.description||''}
+        <br><span style="font-size:11px;color:var(--amber)">📍 ${n.area_desc||'—'}（${lvl}概略位置，非精確地點）</span>
+        <br><span style="font-size:10px;color:var(--muted)">來源：交通部 TDX 即時路況</span></div>`);
+    });
+  }catch(e){}
+
+  // 避難所圖層已關閉（改到天氣分頁不顯示在地圖上）
+
+  // AI 待確認事件（CCTV 偵測，需 3 人確認才發布）
+  // 圖例本來就有「AI 待確認」橘點，但過去從未真的畫出來——群眾驗證機制完全沒有入口。
+  try{
+    const evs = await(await _fetch(API+'/api/v1/ai-events')).json();
+    evs.forEach(e=>{
+      const m=L.marker([e.lat,e.lon],{icon:L.divIcon({className:'',html:`<div style="width:30px;height:30px;border-radius:50%;background:#ffb300;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 0 0 3px rgba(255,179,0,.3),0 0 14px rgba(255,179,0,.8);border:2px dashed #fff">${e.label?.slice(0,1)||'❓'}</div>`,iconSize:[30,30],iconAnchor:[15,15]})}).addTo(govLayer);
+      m.bindPopup(`<div class="pop"><b>${e.label||e.type}</b>（AI 待確認 · 信心 ${Math.round((e.confidence||0)*100)}%）<br>📹 ${e.camera_id||''}<br>${e.image?`<img src="${API}${e.image}" style="width:100%;border-radius:8px;margin-top:6px;max-height:220px;object-fit:cover" onerror="this.style.display='none'">`:''}<span style="font-size:10px;color:var(--muted)">你在附近嗎？幫忙確認是否屬實（累計 3 人確認即正式發布）</span><div style="display:flex;gap:6px;margin-top:8px"><button class="btn" style="flex:1;padding:6px;font-size:12px;background:#0091ff" onclick="voteAiEvent(${e.id},'confirm',this)">✅ 屬實</button><button class="btn ghost" style="flex:1;padding:6px;font-size:12px" onclick="voteAiEvent(${e.id},'reject',this)">❌ 不是</button></div><div style="font-size:10px;color:var(--muted);margin-top:4px">已確認 ${e.confirm||0} · 已否認 ${e.reject||0}</div></div>`);
+    });
+  }catch(e){}
+
+  // 現場求救（SOS）—— 附近的人應該看得到，不能只發一則推播就沒下文
+  try{
+    const sos = await(await _fetch(API+'/api/v1/sos/active')).json();
+    // location_known=false 的求救座標是 (0,0)——那是幾內亞灣，畫在地圖上會把
+    // 救援指向大西洋。這些人同樣在等救援，改用下方的清單呈現。
+    const noLoc = sos.filter(s=>s.location_known===false);
+    if(noLoc.length){
+      const el=document.getElementById('sosNoLoc') || (()=>{
+        const d=document.createElement('div'); d.id='sosNoLoc';
+        d.style.cssText='position:fixed;left:10px;right:10px;bottom:120px;z-index:1400;background:rgba(255,59,92,.95);color:#fff;padding:10px 12px;border-radius:12px;font-size:12px;line-height:1.6;box-shadow:0 4px 14px rgba(0,0,0,.5)';
+        document.body.appendChild(d); return d; })();
+      // 每筆都要有解除按鈕。這個橫幅曾經只有文字——位置未知的求救不畫地圖
+      // 標記（座標是假的），而解除按鈕只做在地圖彈窗裡，結果這類求救
+      // 「永遠沒辦法消除」，紅色橫幅一掛七天。
+      el.innerHTML='🚨 <b>'+noLoc.length+' 筆求救沒有位置資訊</b>（無法標在地圖上）<br>'+
+        noLoc.slice(0,3).map(s=>'・'+(s.message||'需要協助').slice(0,50)+(s.contact?('　📞 '+s.contact):'')
+          +' <button class="btn" style="display:inline-block;width:auto;padding:2px 10px;font-size:11px;background:#2fe0a0;margin-left:6px" onclick="resolveSos('+s.id+',this)">✓ 解除</button>').join('<br>');
+    } else { document.getElementById('sosNoLoc')?.remove(); }
+    sos.filter(s=>s.location_known!==false).forEach(s=>{
+      const m=L.marker([s.lat,s.lon],{icon:L.divIcon({className:'',html:`<div style="width:34px;height:34px;border-radius:50%;background:#ff3b5c;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 0 0 4px rgba(255,59,92,.35),0 0 18px rgba(255,59,92,.9);border:2px solid #fff;animation:pulse 1.4s infinite">🚨</div>`,iconSize:[34,34],iconAnchor:[17,17]})}).addTo(reportLayer);
+      m.bindPopup(`<div class="pop"><b>🚨 緊急求救</b><br>${s.message||'需要協助'}<br>${s.contact?`📞 ${s.contact}<br>`:''}<span style="font-size:10px;color:var(--muted)">${s.time?new Date(s.time).toLocaleString('zh-TW'):''}</span><div style="margin-top:8px"><button class="btn" style="width:100%;padding:6px;font-size:12px;background:#2fe0a0" onclick="resolveSos(${s.id},this)">✓ 已協助/已解除</button></div></div>`);
+    });
+  }catch(e){}
+
+  // 自動框住所有災情標記 + 我的位置（全台視角，讓所有災情可見）
+  fitDisasterBounds();
+}
+
+async function voteAiEvent(id, vote, btn){
+  btn.disabled=true; btn.textContent='處理中…';
+  try{
+    const r = await(await _fetch(API+`/api/v1/ai-events/${id}/verify`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({vote})})).json();
+    toast(r.ok?(vote==='confirm'?'✅ 已送出確認':'已送出否認'):'❌ 送出失敗');
+    if(r.ok) loadReports();
+  }catch(e){ toast('❌ 連線失敗'); btn.disabled=false; }
+}
+async function resolveSos(id, btn){
+  btn.disabled=true; btn.textContent='處理中…';
+  try{
+    const r = await(await _fetch(API+`/api/v1/sos/${id}/resolve`,{method:'POST'})).json();
+    // 後端新規則：發起者本人立即解除；其他人要湊滿 2 個不同裝置才解除
+    // （防止單人惡意把別人的活躍求救滅口）。pending=true 代表已記一票。
+    if(r.pending){ toast('✓ '+(r.message||'已記錄，待其他人確認')); btn.textContent='待確認 '+r.votes+'/'+r.need; return; }
+    toast(r.ok?'✓ 已標記解除':'❌ 失敗');
+    if(r.ok) loadReports();
+  }catch(e){ toast('❌ 連線失敗'); btn.disabled=false; }
+}
+
+function fitDisasterBounds(){
+  const pts = [];
+  reportLayer.eachLayer(l=>pts.push(l.getLatLng()));
+  govLayer.eachLayer(l=>pts.push(l.getLatLng()));
+  if(myPos) pts.push(L.latLng(myPos[0],myPos[1]));
+  if(pts.length > 1){
+    map.fitBounds(L.latLngBounds(pts), {padding:[40,40], maxZoom:10});
+  } else if(pts.length === 1){
+    map.setView(pts[0], 11);
+  }
+}
+
+async function loadShelters(){
+  shelterLayer.clearLayers();
+  if(!myPos)return;
+  try{
+    const s=await(await fetch(`${API}/api/v1/shelters?lat=${myPos[0]}&lon=${myPos[1]}&radius_m=5000`)).json();
+    s.slice(0,15).forEach(x=>{
+      const m=L.marker([x.lat,x.lon],{icon:L.divIcon({className:'',html:`<div style="width:22px;height:22px;border-radius:50%;background:#2fe0a0;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:12px">🏠</div>`,iconSize:[22,22],iconAnchor:[11,11]})}).addTo(shelterLayer);
+      m.bindPopup(`<div class="pop"><b>${x.name}</b><br>${x.district||''}${x.village||''}<br>距 ${x.dist}m${x.capacity?` · 容納 ${x.capacity}人`:''}<br><span style="font-size:10px;color:var(--muted)">來源：內政部消防署</span></div>`);
+    });
+  }catch(e){}
+}
+
+// 頂部警戒
+async function loadLevel(){
+  try{
+    const d=await(await _fetch(API+'/api/v1/dashboard')).json();
+    const c=$('levelChip');
+    const L={none:['🟢 正常','ok'],yellow:['🟡 注意','warn'],orange:['🟠 警戒','warn'],red:['🔴 危險','bad']};
+    const lv=L[d.level]||L.none; c.textContent=lv[0]; c.className=lv[1];
+  }catch(e){$('levelChip').textContent='🔌 離線'}
+}
+
+// 回報
+const tg=$('typegrid');
+TYPES.forEach(t=>{const b=document.createElement('button');b.innerHTML=`<span class="ic">${t.l.split(' ')[0]}</span>${t.l.split(' ')[1]}`;b.dataset.k=t.k;b.onclick=()=>{selType=t.k;[...tg.children].forEach(x=>x.classList.remove('sel'));b.classList.add('sel')};tg.appendChild(b)});
+tg.children[0].classList.add('sel');
+$('btnShot').onclick=()=>{const f=$('fileInput');f.setAttribute('capture','environment');f.click()};
+$('btnGallery').onclick=()=>{$('fileInput').removeAttribute('capture');$('fileInput').click()};
+$('fileInput').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{photoData=r.result;$('prev').src=r.result;$('prev').classList.remove('hidden')};r.readAsDataURL(f)};
+$('btnSubmit').onclick=async()=>{
+  if(!myPos){
+    toast('📍 定位中，請稍候…');
+    const t0=Date.now();
+    while(!myPos && Date.now()-t0<10000){ await new Promise(r=>setTimeout(r,500)); }
+    if(!myPos){toast('⚠️ 定位失敗，請確認手機「位置資訊」已開啟');return}
+  }
+  const fd=new FormData();
+  if(photoData){const b=await(await fetch(photoData)).blob();fd.append('photo',b,'report.jpg')}
+  fd.append('report_type',selType);fd.append('lat',myPos[0]);fd.append('lon',myPos[1]);
+  fd.append('description',$('desc').value);fd.append('reporter','anonymous');
+  fd.append('device_id',getDeviceId());
+  try{const resp=await _fetch(API+'/api/v1/reports',{method:'POST',body:fd});
+    const r=await resp.json().catch(()=>({}));
+    // 失敗時「為什麼」很重要：429 是太頻繁（等一下再送），5xx 是伺服器出問題。
+    // 表單內容會保留，使用者可以直接再按一次。
+    if(r.ok){toast('✅ 已送出，謝謝你的回報');$('desc').value='';photoData=null;$('prev').classList.add('hidden');closeSheet();loadReports()}
+    else if(resp.status===429) toast('⏳ 回報太頻繁，請稍後再送（內容已保留）','urgent')
+    else toast('❌ 送出失敗（'+(resp.status||'連線')+'）：'+((r.detail&&(r.detail[0]?.msg||r.detail))||'內容已保留，可再試一次'),'urgent')
+  }catch(e){toast('❌ 連線失敗')}
+};
+
+// SOS
+$('sos').onclick=async()=>{
+  $('overlay').classList.add('show');$('sosSheet').style.display='block';
+  // 立即顯示快取 GPS（即使還沒刷新也不會空）
+  const cached=JSON.parse(localStorage.getItem('fz_gps_cache')||'null');
+  if(cached){sosPos=[cached.lat,cached.lon];$('sosGps').textContent='📍 '+cached.lat.toFixed(4)+', '+cached.lon.toFixed(4)+(cached.age?' ('+cached.age+')':'');}
+  // 背景即時刷新 GPS（不阻塞 UI）
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(function(p){
+      sosPos=[p.coords.latitude,p.coords.longitude];
+      localStorage.setItem('fz_gps_cache',JSON.stringify({lat:p.coords.latitude,lon:p.coords.longitude,age:'即時',at:Date.now()}));
+      var g=document.getElementById('sosGps');if(g)g.textContent='📍 '+p.coords.latitude.toFixed(4)+', '+p.coords.longitude.toFixed(4);
+    },function(){var g=document.getElementById('sosGps');if(g&&!sosPos)g.textContent='📍 定位失敗';},{enableHighAccuracy:true,timeout:5000});
+  }
+};
+$('btnSosCancel').onclick=backToMap;
+
+// 背景 GPS 追蹤：每 30s 更新快取
+setInterval(()=>{
+  if(!navigator.geolocation)return;
+  navigator.geolocation.getCurrentPosition(p=>{
+    localStorage.setItem('fz_gps_cache',JSON.stringify({lat:p.coords.latitude,lon:p.coords.longitude,age:'即時',at:Date.now()}));
+    if(myPos){myPos=[p.coords.latitude,p.coords.longitude];if(myMarker)myMarker.setLatLng(myPos);}
+  },null,{enableHighAccuracy:false,timeout:5000,maximumAge:60000});
+},30000);
+
+// ── 求救送出 ────────────────────────────────────────────────
+// 這條路徑的設計原則：**寧可重複，不可遺失；寧可說沒送到，不可謊稱送到。**
+//
+// 原本的寫法有三個會弄丟求救的洞：
+//   1. 只有拋例外才進佇列。後端回 429/500/格式不符時走到 else 分支，
+//      只跳一個「發送失敗」的 toast，那筆求救就這樣消失了。
+//   2. 沒有冪等鍵。逾時重送會在救援端產生兩個點位，分不清是兩個人。
+//   3. 送不到時只說「已排隊稍後重試」，沒告訴使用者現在該打 119。
+//      在災害現場，這句話的有無是有分別的。
+//
+// 改成：先寫進佇列 → 再嘗試送出 → 確認成功才從佇列移除。
+// 任何中途失敗（例外、非 2xx、瀏覽器被殺掉）求救都還在佇列裡。
+function sosQueueRead(){ try{ return JSON.parse(localStorage.getItem('fz_sos_queue')||'[]'); }catch(e){ return []; } }
+function sosQueueWrite(q){ try{ localStorage.setItem('fz_sos_queue',JSON.stringify(q)); }catch(e){} }
+function sosNewId(){ return (crypto.randomUUID? crypto.randomUUID() : 'sos-'+Date.now()+'-'+Math.random().toString(36).slice(2)); }
+
+// 送出管道。主要是自己的後端；fz_sos_backup 可設定一個獨立的備援端點
+//（例如 Cloudflare Worker），讓後端整台掛掉時求救仍有去處。
+// 備援端點：跑在 Cloudflare 邊緣，跟主後端是完全獨立的故障域。
+// 主後端掛掉（颱風天停電、網路中斷）時求救仍有去處，之後由後端回填。
+// localStorage 可覆寫，方便測試或日後更換。
+const SOS_BACKUP_DEFAULT = 'https://sos-backup.allen34556.workers.dev';
+function sosChannels(){
+  const list = [API+'/api/v1/sos'];
+  const backup = localStorage.getItem('fz_sos_backup') || SOS_BACKUP_DEFAULT;
+  if(backup) list.push(backup.replace(/\/$/,'')+'/api/v1/sos');
+  return list;
+}
+
+// 回傳 {ok, via, errors[]}。任何一個管道成功就算成功。
+async function sosDeliver(item){
+  const errors=[];
+  for(const url of sosChannels()){
+    try{
+      const fd=new FormData();
+      fd.append('lat',item.lat); fd.append('lon',item.lon);
+      fd.append('message',item.message||'緊急求救');
+      fd.append('contact',item.contact||'');
+      fd.append('client_id',item.client_id);      // 冪等鍵，重送不會變成兩筆
+      fd.append('location_known', item.location_known ?? '1');
+      if(item.test) fd.append('test',item.test);
+      const resp = await _fetch(url,{method:'POST',body:fd},10000);
+      if(!resp.ok){ errors.push(`${url} → HTTP ${resp.status}`); continue; }
+      const r = await resp.json();
+      if(r && r.ok) return {ok:true, via:url, duplicate:!!r.duplicate, errors};
+      errors.push(`${url} → ${r && (r.detail||r.message) || '回應格式不符'}`);
+    }catch(e){ errors.push(`${url} → ${e.name==='AbortError'?'逾時':(e.message||'連線失敗')}`); }
+  }
+  return {ok:false, via:null, errors};
+}
+
+function sosShowStatus(kind, html){
+  const el=$('sosStatus'); if(!el) return;
+  const c = kind==='ok' ? 'var(--cyan)' : kind==='pending' ? 'var(--amber)' : 'var(--red)';
+  el.style.display='block';
+  el.style.border='1px solid '+c;
+  el.style.background=c+'1a';
+  el.innerHTML=html;
+}
+
+$('btnSosSend').onclick=async()=>{
+  const btn=$('btnSosSend');
+  // 位置優先序：目前定位 → 上次快取的 GPS → 沒有。
+  // 原本沒定位時直接送 (23.6, 121)——那是中央山脈裡。使用者以為位置送出去了，
+  // 救援端會被帶到完全錯的地方。拿不到位置就要說拿不到。
+  let pos = sosPos;
+  if(!pos){ try{ const c=JSON.parse(localStorage.getItem('fz_gps_cache')||'null'); if(c&&c.lat) pos=[c.lat,c.lon]; }catch(e){} }
+  const known = !!pos;
+  if(!known && !($('sosMsg').value||'').trim()){
+    sosShowStatus('fail',
+      '⚠️ <b>拿不到你的位置</b><br>'+
+      '<span style="color:var(--muted)">求救還是可以送出，但救援端只會看到你打的字。'+
+      '請先在訊息欄描述你在哪裡（路名、建築物、幾樓）。</span>'+
+      '<div style="margin-top:10px"><a class="btn danger" href="tel:119" style="display:block;text-align:center;text-decoration:none;padding:10px;margin:0">📞 情況緊急請直接撥 119</a></div>');
+    return;
+  }
+  const item={
+    client_id: sosNewId(),
+    lat: known? pos[0] : 0, lon: known? pos[1] : 0,
+    location_known: known ? '1' : '0',
+    message: $('sosMsg').value||'緊急求救',
+    contact: $('sosContact').value||'',
+    test: $('sosTest')?.checked ? '1' : '',
+    queued_at: Date.now(),
+  };
+  // 先入佇列——這一步做完，這筆求救就不可能因為後面任何失敗而消失
+  const q=sosQueueRead(); q.push(item); sosQueueWrite(q);
+
+  btn.disabled=true; btn.textContent='傳送中…';
+  sosShowStatus('pending','⏳ 正在送出…');
+  const res = navigator.onLine ? await sosDeliver(item)
+                               : {ok:false, errors:['目前沒有網路連線']};
+  btn.disabled=false; btn.textContent='🚨 發送求救（含定位）';
+
+  if(res.ok){
+    sosQueueWrite(sosQueueRead().filter(x=>x.client_id!==item.client_id));
+    sosShowStatus('ok', known
+      ? '✅ <b>求救已送達</b><br><span style="color:var(--muted)">已附上你的位置。附近的人與救援端已收到通知，請保持手機暢通。</span>'
+      : '✅ <b>求救已送達</b><br><span style="color:var(--amber)">⚠️ 但沒有附上位置</span><br><span style="color:var(--muted)">救援端只看得到你打的字。若情況緊急，請同時撥 119——119 可以定位到你的手機。</span>');
+    toast('🚨 求救已送達');
+    setTimeout(()=>{ $('overlay').classList.remove('show'); $('sosSheet').style.display='none'; $('sosStatus').style.display='none'; }, 2200);
+    return;
+  }
+  // 沒送到就要講清楚，並且把最可靠的管道放到手邊
+  const pending=sosQueueRead().length;
+  sosShowStatus('fail',
+    '⚠️ <b>還沒送出去</b>（已保存，恢復連線會自動重送）<br>'+
+    '<span style="color:var(--muted);font-size:11px">'+(res.errors[0]||'')+'</span>'+
+    '<div style="margin-top:10px;display:flex;gap:8px">'+
+      '<a class="btn danger" href="tel:119" style="flex:1;text-align:center;text-decoration:none;padding:10px;margin:0">📞 撥打 119</a>'+
+      '<button class="btn ghost" style="flex:1;padding:10px;margin:0" onclick="flushSosQueue(true)">🔄 立即重試</button>'+
+    '</div>'+
+    '<div style="margin-top:8px;font-size:11px;color:var(--muted)">情況緊急請直接撥 119，不要等這個 App。待送出 '+pending+' 筆。</div>');
+  toast('⚠️ 求救尚未送出，請考慮直接撥 119','urgent');
+  sosBadge();   // 使用者可能關掉這個面板，常駐提示要立刻出現
+};
+// 離線佇列補送
+window.flushSosQueue = async function(manual){
+  const q=sosQueueRead();
+  if(!q.length){ if(manual) toast('沒有待送出的求救'); return; }
+  if(!navigator.onLine){ if(manual) toast('目前沒有網路連線','urgent'); return; }
+  const remain=[];
+  for(const item of q){
+    // 舊版佇列裡的項目沒有冪等鍵，補一個再送
+    if(!item.client_id) item.client_id = sosNewId();
+    const res = await sosDeliver(item);
+    if(!res.ok) remain.push(item);
+  }
+  sosQueueWrite(remain);
+  const sent=q.length-remain.length;
+  if(sent>0) toast('✅ 已補送 '+sent+' 筆求救');
+  else if(manual) toast('⚠️ 仍然送不出去，請直接撥 119','urgent');
+  sosBadge();
+};
+// 待送出求救的常駐提示：使用者要知道自己的求救還在路上
+function sosBadge(){
+  const n=sosQueueRead().length;
+  let el=document.getElementById('sosPending');
+  if(!n){ if(el) el.remove(); return; }
+  if(!el){
+    el=document.createElement('div'); el.id='sosPending';
+    el.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:76px;z-index:1500;background:var(--red);color:#fff;padding:8px 14px;border-radius:18px;font-size:12px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.5);cursor:pointer';
+    el.onclick=()=>flushSosQueue(true);
+    document.body.appendChild(el);
+  }
+  el.textContent='⚠️ '+n+' 筆求救尚未送出 · 點此重試';
+}
+window.addEventListener('online',()=>flushSosQueue());
+setInterval(()=>flushSosQueue(),60000);
+// App 一啟動就先補送一次（使用者可能上次關掉時還有沒送出的）
+setTimeout(()=>{ flushSosQueue(); sosBadge(); }, 3000);
+
+// 分頁
+function openSheet(){
+  // 其他四個分頁（天氣/CCTV AI/警報/我的）open 函式都會明確設 style.display='block'，
+  // 只有這裡原本只切 CSS class。closeAllPanels() 會對所有面板設 display:none，
+  // inline style 蓋過 CSS class，導致這裡再怎麼加 show class 都打不開——
+  // 實機實測（Pixel 10 Pro Fold）證實：點「回報」導覽列會亮起，但面板完全不出現。
+  $('sheet').style.display='block';
+  $('overlay').classList.add('show'); $('sheet').classList.add('show');
+}
+function closeSheet(){ $('overlay').classList.remove('show'); $('sheet').classList.remove('show'); }
+
+// 每個 openX() 只負責打開自己，從來沒有人負責關掉別的——結果切過六個分頁之後
+// 五個面板全疊在一起，而灰幕 overlay 卻已隱藏，使用者點外面關不掉，只能一個
+// 一個按 ✕。順帶：切走 CCTV AI 分頁時 SSE 不會斷（只有 ✕ 會），連線會累積。
+const ALL_PANELS = ['sheet','sosSheet','weatherSheet','cctvAiSheet','alertSheet','meSheet'];
+function closeAllPanels(){
+  ALL_PANELS.forEach(id=>{
+    const e=document.getElementById(id); if(!e) return;
+    e.style.display='none'; e.classList.remove('show');
+  });
+  $('overlay').classList.remove('show');
+  // 面板關了就該把它的資源一起收掉，否則 SSE 與 Leaflet 實例會留著
+  try{ stopScanFeed(); }catch(e){}
+  if(typeof cctvAiMap!=='undefined' && cctvAiMap){ try{cctvAiMap.remove()}catch(e){} cctvAiMap=null; cctvAiLayer=null; }
+}
+// 面板自己的 ✕／取消按鈕只會關面板，不會重設導覽列高亮——所以從「我的」分頁
+// 按 ✕ 回到地圖後，底部導覽列仍停在「我的」（實機實測抓到）。統一收口成這支。
+function backToMap(){
+  closeAllPanels();
+  document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('on'));
+  document.querySelector('#nav button[data-tab=map]')?.classList.add('on');
+}
+$('btnCancel').onclick=backToMap;
+$('overlay').onclick=backToMap;
+
+document.querySelectorAll('#nav button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+  const t=b.dataset.tab;
+  closeAllPanels();                 // 先收乾淨，再開要開的那個
+  if(t==='report')openSheet();
+  else if(t==='alert'){openAlerts()}
+  else if(t==='weather'){openWeather()}
+  else if(t==='cctvai'){openCctvAi()}
+  else if(t==='me'){openMe()}
+  // t==='map' 什麼都不用做，closeAllPanels() 已經把地圖露出來了
+});
+
+// Service Worker 只在純網頁環境註冊（PWA）。原生 App 裡 Capacitor 已經有
+// 自己的資源打包與離線機制，疊上第二層快取邏輯只會讓除錯變複雜、行為不一致
+// ——原生 App 的資源本來就隨 APK 一起裝好，不需要 SW 再快取一次。
+if(!window.Capacitor && 'serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    // hadController=true 代表這個瀏覽器之前就裝過殼（回訪），這時如果換了
+    // 新的 controller，才代表「新版部署了」需要重整拿新 JS；首次安裝時
+    // controller 本來就是空的，不該被這個邏輯誤判成「換版」而多跳一次。
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register('sw.js').then(reg=>{
+      // 主動檢查一次，不要乾等瀏覽器預設的背景檢查週期（可能長達 24 小時）
+      // ——今天實測發現：SW 快取殼之後，連 fetch(...,{cache:'no-store'})
+      // 都繞不過去，舊 JS 會一直服役到這個更新流程真的跑完。
+      reg.update().catch(()=>{});
+      if(hadController){
+        navigator.serviceWorker.addEventListener('controllerchange', ()=>{
+          location.reload();
+        }, {once:true});
+      }
+    }).catch(()=>{});
+  });
+}
+
+// 啟動：先請求授權（定位+通知一起），完成後定位，同時載入地圖資料
+requestPermissions().then(()=>{ if(!myPos){ locate(); } });
+loadReports();loadLevel();
+setInterval(loadReports, 60000);   // AI待確認/SOS 需要保持即時，不能只在開啟時抓一次
+if(navigator.onLine) preDownloadTiles();   // 原本這行完全沒被呼叫，離線地圖從未真的下載過
+setInterval(loadLevel,60000);
+
+// ── 警報分頁 ──
+const TYPE_ICON={flood:'🌊',landslide:'⛰️',road_closure:'⛔',reservoir:'💧',water_outage:'🚱',power_outage:'⚡',fire_safety:'🔥',wind:'💨',accident:'🚗',rain:'🌧️',fire:'🔥',weather:'🌪️',rollover:'🚙',obstacle:'⚠️'};
+const AI_TYPE_NAME={accident:'車禍',fire:'火災',flood:'水災',weather:'異常天氣',rollover:'翻車',obstacle:'道路障礙物',flood_red:'淹水(紅)',flood_orange:'淹水(橘)',flood_yellow:'淹水(黃)',sos:'SOS求救',road_closure:'道路封閉',landslide:'土石流',typhoon:'颱風',rain_heavy:'豪雨',wind:'強風',reservoir:'水庫放流',power_outage:'停電',water_outage:'停水'};
+const MT={Alert:'🔴 現役',Update:'🟠 更新',Cancel:'✅ 解除'};
+async function openAlerts(){
+  document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('on'));
+  document.querySelector('#nav button[data-tab=alert]').classList.add('on');
+  $('overlay').classList.add('show');$('alertSheet').style.display='block';
+  $('alertList').innerHTML='<div style="padding:20px;text-align:center;color:var(--muted)">載入中…</div>';
+  try{
+    const d=await(await _fetch(API+'/api/v1/dashboard')).json();
+    const L={none:['🟢 正常','ok'],yellow:['🟡 注意','warn'],orange:['🟠 警戒','warn'],red:['🔴 危險','bad']};
+    const lv=L[d.level]||L.none;
+    $('alertLevel').innerHTML=`目前：<b style="color:var(--${lv[1]==='bad'?'red':lv[1]==='warn'?'amber':'green'})">${lv[0]}</b>`+(d.reasons&&d.reasons.length?` · ${d.reasons[0].slice(0,50)}`:'');
+    const n=await(await _fetch(API+'/api/v1/ncdr')).json();
+    // 用 high_alert_list（一則公告一筆）而不是 high_alert（地圖用，同一則會
+    // 依受影響縣市展開成多點）——直接用地圖那份會讓同一則警訊洗版，實測一則
+    // 強風警訊重複 7 次，把其他不同的警訊擠出畫面。舊後端沒有這個欄位時
+    // 自動退回原本的行為。
+    const high=n.high_alert_list||n.high_alert||[];
+    let h='<div style="font-size:12px;color:var(--muted);margin-bottom:8px">全台現役高危示警 <b style="color:#fff">'+high.length+'</b> 條（NCDR 政府整合）</div>';
+    if(high.length){
+      high.slice(0,30).forEach(e=>{
+        const link=e.cap_url?`<a href="${e.cap_url}" target="_blank" rel="noopener" style="color:var(--cyan);font-size:11px;text-decoration:none">📄 原始公告 →</a>`:'';
+        h+=`<div style="background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px">
+          <div style="font-size:13px;font-weight:700">${TYPE_ICON[e.type]||'📌'} ${AI_TYPE_NAME[e.type]||e.title||e.type} <span style="color:${e.msgtype==='Alert'?'var(--red)':e.msgtype==='Cancel'?'var(--green)':'var(--amber)'};font-size:11px">${MT[e.msgtype]||''}</span></div>
+          <div style="font-size:12px;color:var(--muted);margin-top:3px">${e.summary||''}</div>
+          ${(e.areas&&e.areas.length)?`<div style="font-size:11px;color:var(--amber);margin-top:4px">📍 ${e.areas.slice(0,6).join('、')}${e.areas.length>6?` 等 ${e.areas.length} 個地區`:''}</div>`:''}
+          ${link?'<div style="margin-top:6px">'+link+'</div>':''}
+        </div>`;
+      });
+    }else h+='<div style="padding:16px;text-align:center;color:var(--muted)">✅ 目前無現役高危示警</div>';
+    try{
+      const t=await(await _fetch(API+'/api/v1/tdx')).json();
+      if(t.alerts&&t.alerts.length){
+        h+='<div style="font-size:12px;color:var(--muted);margin:12px 0 8px">🛣️ 道路即時消息（交通部 TDX）</div>';
+        const seen=new Set();
+        t.alerts.slice(0,25).forEach(a=>{
+          // 去掉「交通訊息：」前綴 + 過濾純分類名（太短）
+          const msg=(a||'').replace(/^交通訊息：/,'').trim();
+          if(!msg||seen.has(msg))return;
+          seen.add(msg);
+          h+=`<div style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-bottom:6px;font-size:12px;line-height:1.5">⚠️ ${msg}</div>`;
+        });
+      }
+    }catch(e){}
+    $('alertList').innerHTML=h;
+  }catch(e){$('alertList').innerHTML='<div style="padding:20px;text-align:center;color:var(--muted)">連線失敗</div>'}
+}
+$('btnAlertClose').onclick=backToMap;
+$('btnWeatherClose').onclick=()=>{backToMap();if(window._satTimer)clearInterval(window._satTimer)};
+
+// CCTV AI 分頁：地圖模式 — 掃到誰亮誰 + 下方截圖
+let cctvAiMap = null;
+let cctvAiLayer = null;
+let cctvAiScanning = null;   // {id, lat, lon} 正在掃描的 CCTV
+let cctvAiScanIdx = 0;
+let cctvAiScanTimer = null;   // 只在 SSE 不可用時才會用到的退路計時器
+let cctvAiStream = null;      // SSE 連線
+let cctvAiFrame = null;       // 目前掃描顯示的那一幀（圖片網址，放大用）
+async function openCctvAi(){
+  document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('on'));
+  document.querySelector('#nav button[data-tab=cctvai]').classList.add('on');
+  $('overlay').classList.add('show');$('cctvAiSheet').style.display='block';
+  $('cctvAiContent').innerHTML=`
+    <div id="cctvAiMapWrap" style="position:relative;height:60vh;background:#000">
+      <div id="cctvAiLoading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#888">地圖載入中…</div>
+    </div>
+    <div id="cctvAiFooter" style="padding:10px;background:var(--panel);border-top:1px solid var(--line)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="font-size:11px;color:var(--muted)">📡 掃描狀態</div>
+        <div id="cctvAiStats" style="font-size:11px;color:var(--cyan);font-weight:700">—</div>
+      </div>
+      <div id="cctvAiShot" style="background:var(--panel2);border-radius:8px;overflow:hidden;min-height:80px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px">尚未開始掃描</div>
+    </div>`;
+  try{
+    // 取全台 CCTV 座標 + 最新事件
+    const [geoR, evR, tdxR] = await Promise.all([
+      _fetch(API+'/api/v1/cctv/geo').catch(()=>({json:function(){return Promise.resolve({count:0,cctv:[]})}})),
+      _fetch(API+'/api/v1/ai-events').catch(()=>({json:function(){return Promise.resolve([])}})),
+      _fetch(API+'/api/v1/tdx').catch(()=>({json:function(){return Promise.resolve({cctv_nearest:[]})}})),
+    ]);
+    const geo = (await geoR.json()).cctv||[];
+    const events = await evR.json();
+    const tdx = await tdxR.json();
+    const cctvMap = new Map((tdx.cctv_nearest||[]).map(c=>[c.id,c]));
+    const total = geo.length;
+    $('cctvAiStats').textContent = `全台 ${total.toLocaleString()} 支 · 已掃 ${Math.min(cctvAiScanIdx,total)}/${total}`;
+    // 初始化地圖
+    setTimeout(()=>{
+      if(cctvAiMap){cctvAiMap.remove();cctvAiMap=null;}
+      // 鎖定台灣範圍：避免髒座標或使用者拖曳把視野帶到國外
+      const TW_BOUNDS = L.latLngBounds([20.8,118.0],[26.6,123.2]);
+      cctvAiMap = L.map('cctvAiMapWrap',{zoomControl:true,preferCanvas:true,attributionControl:false,
+        maxBounds:TW_BOUNDS, maxBoundsViscosity:1.0, minZoom:7}).setView([23.6,121],8);
+      const ld=document.getElementById('cctvAiLoading'); if(ld) ld.remove();   // 移除「地圖載入中」提示
+      L.tileLayer(NLSC_EMAP7,{maxZoom:14,opacity:.85}).addTo(cctvAiMap);
+      cctvAiLayer = L.layerGroup().addTo(cctvAiMap);
+      // 全台 CCTV 一個個加（circleMarker 輕量）
+      geo.forEach(c=>{
+        const isFw = c.src==='fw';
+        L.circleMarker([c.lat,c.lon],{radius:isFw?5:3,color:isFw?'#ff3b5c':'#00e5ff',fillColor:isFw?'#1a0508':'#0d1526',fillOpacity:.7,weight:1}).addTo(cctvAiLayer);
+      });
+      // 套用全台視角（限制在台灣框內，不受個別異常座標影響）
+      cctvAiMap.fitBounds(TW_BOUNDS,{padding:[10,10],maxZoom:9});
+      // 輪詢後端真實掃描狀態（cctv_cascade 回報「正在掃哪一支」）
+      stopScanFeed();
+      const geoById = new Map(geo.map(c=>[c.id,c]));
+      let lastTs = null;
+
+      // 原本每 2 秒打一次 /cctv/scan-state。實測單次 17,700 bytes（82% 是內嵌
+      // 的 base64 縮圖），一位使用者開著地圖一小時就是 1,800 次請求 / 31.9 MB。
+      // 全台開放使用撐不住這個量級，改成：
+      //   ① SSE 長連線，有變化才推（事件約 300 bytes）
+      //   ② 縮圖走自己的網址，瀏覽器快取，同一支 CCTV 只抓一次
+      //   ③ 頁面切到背景就斷線（見下方 visibilitychange）
+      // SSE 連不上時才退回輪詢，且間隔拉長到 5 秒。
+      function renderScan(s){
+        if(!cctvAiMap||!cctvAiLayer)return;
+        // 掃描服務沒在跑 → 誠實顯示，不播假動畫
+        if(!s.running||!s.current){
+          $('cctvAiStats').textContent = `全台 ${total.toLocaleString()} 支 · 待命中`;
+          if(cctvAiScanning){cctvAiLayer.removeLayer(cctvAiScanning);cctvAiScanning=null;}
+          $('cctvAiShot').innerHTML = '<div style="padding:14px;text-align:center;color:var(--muted);font-size:11px">掃描服務未啟動</div>';
+          return;
+        }
+        const c = s.current;
+        $('cctvAiStats').textContent = `全台 ${total.toLocaleString()} 支 · 掃描中`;
+        if(c.ts===lastTs) return;          // 同一支不重畫
+        lastTs = c.ts;
+        cctvAiScanIdx++;
+        // 亮起這支 CCTV（脈動 marker）
+        if(cctvAiScanning) cctvAiLayer.removeLayer(cctvAiScanning);
+        const meta = geoById.get(c.cctv_id);
+        const isFw = meta ? meta.src==='fw' : false;
+        const hot = c.result==='disaster' ? '#ff3b5c' : c.result==='suspect' ? '#ffb020' : (isFw?'#ff3b5c':'#00e5ff');
+        cctvAiScanning = L.circleMarker([c.lat,c.lon],{
+          radius:12,color:hot,fillColor:hot,fillOpacity:.4,weight:3,
+          className:'cctv-pulse'
+        }).addTo(cctvAiLayer).bindPopup(`📹 掃描中<br>${c.cctv_id}`);
+        cctvAiMap.panTo([c.lat,c.lon]);
+        // 下方顯示 AI 實際分析的那一幀（base64 JPEG，保證畫得出來）
+        // 優先用 frame_url（可快取的 JPEG）；舊後端只給 base64 時仍能運作
+        cctvAiFrame = c.frame_url ? (API + c.frame_url)
+                    : (c.frame_b64 ? 'data:image/jpeg;base64,' + c.frame_b64 : null);
+        const badge = c.result==='disaster' ? '<span style="color:var(--red)">⚠️ 偵測到災情</span>'
+                    : c.result==='suspect'  ? '<span style="color:var(--amber)">🔎 可疑，精判中</span>'
+                    : '<span style="color:var(--muted)">✓ 正常</span>';
+        const imgTag = cctvAiFrame
+          ? `<img src="${cctvAiFrame}" loading="lazy" onclick="enlargeFrame()" onerror="this.replaceWith(Object.assign(document.createElement('div'),{textContent:'畫面已過期',style:'width:96px;height:64px;background:#000;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#888'}))" style="width:96px;height:64px;object-fit:cover;border-radius:6px;background:#000;cursor:zoom-in" title="點擊放大">`
+          : `<div style="width:96px;height:64px;background:#000;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#888">無畫面</div>`;
+        // 若這支偵測到災情/可疑，就地給「確認屬實 / 否認」按鈕（對應主地圖的 AI 待確認事件）
+        const evMatch = events.find(e => (e.camera_id||'') === (c.cctv_id||''));
+        const voteHtml = (c.result==='disaster'||c.result==='suspect')
+          ? `<div style="display:flex;gap:6px;margin-top:6px">${
+              evMatch
+                ? `<button class="btn" style="flex:1;padding:5px;font-size:11px;background:#0091ff" onclick="voteAiEvent(${evMatch.id},'confirm',this)">✅ 確認屬實</button><button class="btn ghost" style="flex:1;padding:5px;font-size:11px" onclick="voteAiEvent(${evMatch.id},'reject',this)">❌ 否認</button>`
+                : `<span style="font-size:10px;color:var(--muted)">事件建立中…也可到主地圖點橘點確認</span>`
+            }</div>`
+          : '';
+        $('cctvAiShot').innerHTML = `<div style="display:flex;gap:8px;align-items:flex-start">${imgTag}<div style="flex:1"><div style="font-size:12px;font-weight:700">${c.cctv_id}</div><div style="font-size:10px;color:var(--muted)">${isFw?'🚦 國道':'🛣️ 省道'} · ${c.lat.toFixed(3)}, ${c.lon.toFixed(3)}</div><div style="font-size:10px;margin-top:2px">${badge}</div>${voteHtml}</div></div>`;
+      }
+      startScanFeed(renderScan);
+    },100);
+  }catch(e){
+    $('cctvAiContent').innerHTML='<div style="padding:20px;text-align:center;color:var(--muted)">連線失敗：'+e.message+'</div>';
+  }
+}
+$('btnCctvAiClose').onclick=()=>{
+  backToMap();
+};
+
+// ── 掃描狀態訂閱：SSE 優先，連不上才退回輪詢 ──────────────────
+let _scanRender = null;
+function stopScanFeed(){
+  if(cctvAiStream){ try{cctvAiStream.close()}catch(e){} cctvAiStream=null; }
+  if(cctvAiScanTimer){ clearInterval(cctvAiScanTimer); cctvAiScanTimer=null; }
+}
+function startScanFeed(render){
+  _scanRender = render;
+  stopScanFeed();
+  if(document.hidden) return;          // 背景不連線，省電也省頻寬
+  if(typeof EventSource === 'function'){
+    try{
+      const es = new EventSource(API+'/api/v1/cctv/scan-stream');
+      let got = false;
+      es.addEventListener('state', ev=>{
+        got = true;
+        try{ render(JSON.parse(ev.data)); }catch(e){}
+      });
+      es.onerror = ()=>{
+        // EventSource 會自己重連；但如果連一次都沒成功，就是這個環境不支援
+        // （某些 WebView / 代理會擋 text/event-stream），改用輪詢退路。
+        if(!got){ try{es.close()}catch(e){} cctvAiStream=null; startScanPolling(render); }
+      };
+      cctvAiStream = es;
+      return;
+    }catch(e){ /* 落到輪詢 */ }
+  }
+  startScanPolling(render);
+}
+function startScanPolling(render){
+  // 退路：間隔從 2 秒拉長到 5 秒，並用 frames=false 拿掉內嵌縮圖
+  //（17.7KB → 約 3KB），圖片走 frame_url 由瀏覽器快取。
+  async function tick(){
+    if(document.hidden) return;
+    try{
+      const s = await (await _fetch(API+'/api/v1/cctv/scan-state?frames=false')).json();
+      render(s);
+    }catch(e){}
+  }
+  tick();
+  cctvAiScanTimer = setInterval(tick, 5000);
+}
+// 切到背景就斷線，回前景再接回來
+document.addEventListener('visibilitychange', ()=>{
+  if(!_scanRender || !cctvAiMap) return;
+  if(document.hidden) stopScanFeed();
+  else startScanFeed(_scanRender);
+});
+
+// ── 天氣分頁（位置級 2km AI 預測，不以行政區為單位）──
+async function openWeather(){
+  document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('on'));
+  document.querySelector('#nav button[data-tab=weather]').classList.add('on');
+  $('overlay').classList.add('show');$('weatherSheet').style.display='block';
+  $('weatherContent').innerHTML='<div style="text-align:center;color:var(--muted);padding:30px">讀取你這個位置的 AI 預測…</div>';
+  try{
+    // 全台開放使用：每個人看到的是自己所在位置的預報與預警，不是某個固定工地。
+    // 位置優先序：目前定位 → 上次快取的 GPS → 台灣中心（並標明是概況）。
+    const gpsCache = JSON.parse(localStorage.getItem('fz_gps_cache')||'null');
+    const pos = myPos || (gpsCache ? [gpsCache.lat, gpsCache.lon] : null);
+    const q = pos ? `?lat=${pos[0]}&lon=${pos[1]}` : '';
+    const [d, consensus, climate, localNow] = await Promise.all([
+      fetchJSON(API+'/api/v1/weather'+q).catch(()=>({earth2:{},rain:{},fields:{}})),   // weather 掛了不擋整個分頁
+      fetchJSON(API+'/api/v1/consensus').catch(()=>({models:{}})),
+      fetchJSON(API+'/api/v1/climate/events').catch(()=>({events:[]})),
+      pos ? localConditions(pos[0], pos[1]).catch(()=>null) : Promise.resolve(null),
+    ]);
+    // 快照裡若已附上該測站格點的預報，優先用它（同樣是 CDN 靜態檔，源站零運算）
+    let e2=d.earth2||{};
+    if(localNow && localNow.forecast && localNow.forecast.rain_series){
+      const f=localNow.forecast;
+      e2={...e2, accum_24h:f.accum_24h, accum_48h:f.accum_48h,
+          next6h_rain:f.rain_series, rain_series:f.rain_series,
+          next6h_temp:f.temp_series, temp_series:f.temp_series,
+          series_hours:f.series_hours, step_hours:f.step_hours,
+          dbz_peak:f.dbz_peak, next6h_p10:[], next6h_p90:[]};
+    }
+    // 實測雨量優先用「離使用者最近」的測站（/api/v1/local 算的），
+    // 沒定位才退回 /api/v1/weather 帶的工地測站。
+    const rain=(localNow&&localNow.rain)||d.rain||{};
+    // 標題誠實反映這份預報究竟算的是哪一格：
+    //   有定位且該格有 2km 網格 → 你所在的鄉鎮
+    //   有定位但網格還沒產生    → 退回工地格點，明講「非你的位置」
+    //   沒定位                  → 只顯示全台概況，不假裝知道你在哪
+    const placeName = (localNow && localNow.place) || (d.site && d.site.name) || '全台概況';
+    const isMine = d.point_available === true
+                || !!(localNow && localNow.forecast && localNow.forecast.rain_series);
+    const targetTxt = pos
+      ? (isMine ? placeName : `${(d.site&&d.site.name)||'工地'}（你的位置尚無 2km 網格，先看這裡）`)
+      : '尚未定位 · 開啟定位看你所在地';
+    // 序列每步 6 小時（後端 step_hours）。舊版誤當成 1 小時，時間軸差 6 倍。
+    const stepH = e2.step_hours || 6;
+    const hoursAt = i => (e2.series_hours && e2.series_hours[i]) || ((i+1)*stepH);
+    const cur=e2.next6h_rain&&e2.next6h_rain[0]!=null?e2.next6h_rain[0]:0;
+    const curTemp=e2.next6h_temp&&e2.next6h_temp[0]!=null?e2.next6h_temp[0]:'—';
+    const gust=e2.gust_latest!=null?e2.gust_latest:0;
+    // 雨勢分級
+    const lv=cur>=10?'🔴 豪雨':cur>=4?'🟠 大雨':cur>=1?'🟡 小雨':'☁️ 無雨';
+    const lvC=cur>=10?'var(--red)':cur>=4?'var(--orange)':cur>=1?'var(--amber)':'var(--cyan)';
+    // 一句話說重點（民眾一眼看完）
+    const here = isMine ? '你這裡' : '這一區';
+    const summary = cur>=10?`${here}未來 ${stepH} 小時可能下豪雨，請注意`
+      :cur>=4?`${here}未來 ${stepH} 小時可能下大雨，記得帶傘`
+      :cur>=1?`${here}未來 ${stepH} 小時有小雨`
+      : gust>=17?`${here}陣風強勁，戶外作業小心`
+      : gust>=10.8?`${here}有風，天氣還算穩定`
+      : `${here}天氣穩定`;
+
+    let h='';
+    // ── 在地預警橫幅：這是整頁最重要的資訊，放在最上面 ──
+    if(localNow && localNow.level && localNow.level!=='none'){
+      const LV={yellow:['🟡 注意','var(--amber)'],orange:['🟠 警戒','var(--orange)'],red:['🔴 危險','var(--red)']};
+      const [lvTxt,lvCol]=LV[localNow.level]||['⚠️ 注意','var(--amber)'];
+      h+=`<div style="background:linear-gradient(135deg,${lvCol}22,rgba(13,21,38,.4));border:1px solid ${lvCol};border-radius:14px;padding:12px;margin-bottom:12px">`;
+      h+=`<div style="font-size:14px;font-weight:800;color:${lvCol};margin-bottom:4px">${lvTxt} · ${localNow.place||'你所在地'}</div>`;
+      (localNow.reasons||[]).slice(0,4).forEach(r=>{
+        h+=`<div style="font-size:11px;color:var(--fg);line-height:1.6">• ${r}</div>`;
+      });
+      h+=`</div>`;
+    }
+    // ── 頂部大卡：你這個位置現在怎樣（一目了然）──
+    h+=`<div style="background:linear-gradient(135deg,${lvC}33,rgba(13,21,38,.4));border:1px solid ${lvC};border-radius:18px;padding:18px 16px;margin-bottom:12px;text-align:center">`;
+    h+=`<div style="font-size:11px;color:var(--muted);margin-bottom:4px">📍 ${targetTxt} · 2km AI 格點</div>`;
+    h+=`<div style="font-size:13px;color:var(--fg);font-weight:700;margin-bottom:12px">${summary}</div>`;
+    h+=`<div style="font-size:74px;line-height:1;font-weight:900;color:${lvC};text-shadow:0 0 40px ${lvC}66">${cur}</div>`;
+    h+=`<div style="font-size:13px;color:var(--muted);margin-top:4px">mm/hr · 未來 ${stepH} 小時降雨率</div>`;
+    h+=`<div style="font-size:18px;font-weight:700;color:var(--amber);margin-top:8px">${lv}</div>`;
+    h+=`</div>`;
+
+    // ── 三指標一排（民眾最關心的）──
+    h+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">';
+    // 原本這格是「⚡ 雷擊」，但判斷式是 cur>=10（降雨量），系統裡根本沒有
+    // 雷擊資料源——等於用雨量捏造一個雷擊預測。換成真的有資料的 24h 累積雨量。
+    h+=`<div style="background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:12px;text-align:center">
+      <div style="font-size:11px;color:var(--muted)">🌧️ 未來24h</div>
+      <div style="font-size:22px;font-weight:900;margin:4px 0;color:${(e2.accum_24h||0)>=80?'var(--orange)':'var(--cyan)'}">${e2.accum_24h??'—'}</div>
+      <div style="font-size:11px;font-weight:700">mm 累積</div>
+    </div>`;
+    h+=`<div style="background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:12px;text-align:center">
+      <div style="font-size:11px;color:var(--muted)">💨 陣風</div>
+      <div style="font-size:22px;font-weight:900;margin:4px 0;color:${gust>=17?'var(--red)':gust>=10.8?'var(--orange)':'var(--cyan)'}">${gust||'—'}</div>
+      <div style="font-size:11px;font-weight:700">m/s</div>
+    </div>`;
+    h+=`<div style="background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:12px;text-align:center">
+      <div style="font-size:11px;color:var(--muted)">🌡️ 溫度</div>
+      <div style="font-size:22px;font-weight:900;margin:4px 0;color:var(--cyan)">${curTemp}</div>
+      <div style="font-size:11px;font-weight:700">°C</div>
+    </div>`;
+    h+='</div>';
+
+    // ── 24h 累積 vs CWA（凸顯差異）──
+    h+='<div style="background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px">';
+    h+='<div style="font-size:12px;font-weight:700;margin-bottom:6px">📊 AI 預報 vs 氣象署實測</div>';
+    h+='<div style="display:flex;gap:8px">';
+    h+=`<div style="flex:1;background:var(--panel);border-radius:10px;padding:10px">
+      <div style="font-size:11px;color:var(--muted)">氣象署測站實測</div>
+      <div style="font-size:20px;font-weight:900;color:var(--muted)">${rain.rain_24hr??'—'}</div>
+      <div style="font-size:10px;color:var(--muted)">mm · 過去24h · ${rain.station||'—'}站${rain.distance_m?`（${(rain.distance_m/1000).toFixed(1)}km）`:''}</div>
+    </div>`;
+    h+=`<div style="flex:1;background:linear-gradient(135deg,rgba(0,229,255,.12),rgba(0,229,255,.02));border:1px solid var(--cyan);border-radius:10px;padding:10px">
+      <div style="font-size:11px;color:var(--cyan)">AI 2km · ${isMine?'你所在格點':'工地格點'}</div>
+      <div style="font-size:20px;font-weight:900;color:var(--cyan)">${e2.accum_24h??'—'}</div>
+      <div style="font-size:10px;color:var(--cyan)">mm · 未來24h · 預報</div>
+    </div>`;
+    h+='</div>';
+    h+=`<div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.6">左邊是<b>已經下過</b>的實測（離你最近的氣象署測站），右邊是<b>還沒發生</b>的 AI 預報（你所在的 2km 網格）。兩者時間區間不同，並排是給你對照量級，不是準確度比較。</div>`;
+    h+='</div>';
+
+    // ── 未來 6h 趨勢（一條線）──
+    if(e2.next6h_rain&&e2.next6h_rain.length){
+      h+='<div style="background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px">';
+      h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:13px;font-weight:700">📈 ${isMine?'你這裡':'這一區'}未來 ${hoursAt(e2.next6h_rain.length-1)} 小時</div><div style="font-size:10px;color:var(--muted)">mm/hr · 每 ${stepH} 小時一點</div></div>`;
+      const maxv=Math.max(...e2.next6h_rain,1);
+      h+=`<div style="display:flex;gap:4px;align-items:flex-end;height:70px">`;
+      e2.next6h_rain.forEach((v,i)=>{
+        const bh=Math.max(4,Math.round(v/maxv*60));
+        const c=v>=10?'var(--red)':v>=4?'var(--orange)':v>=1?'var(--amber)':'var(--cyan)';
+        h+=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%"><div style="font-size:10px;color:var(--fg);margin-bottom:1px">${v}</div><div style="width:100%;background:${c};border-radius:4px 4px 0 0;height:${bh}px"></div><div style="font-size:9px;color:var(--muted);margin-top:2px">+${hoursAt(i)}h</div></div>`;
+      });
+      h+='</div>';
+      // 機率區間（不確定性）
+      if(e2.next6h_p10&&e2.next6h_p90&&e2.next6h_p10.length){
+        // 誠實標註：這是 CorrDiff 降尺度的擴散抽樣變異，**不是**預報不確定性。
+        // 真正的預報不確定性要用集合預報模型（GenCast/AIFS-ENS）。
+        h+=`<div style="font-size:11px;font-weight:700;margin-top:10px;margin-bottom:4px">🎲 降尺度取樣範圍 <span style="font-weight:400;color:var(--muted)">（同一份預報的 10 次抽樣，非預報不確定性）</span></div>`;
+        e2.next6h_rain.forEach((v,i)=>{
+          const lo=e2.next6h_p10[i]??0, hi=e2.next6h_p90[i]??0;
+          h+=`<div style="display:flex;align-items:center;gap:6px;font-size:11px;margin-bottom:3px"><span style="color:var(--muted);width:30px">+${hoursAt(i)}h</span><span style="color:var(--cyan);width:60px">${lo}~${hi}</span><div style="flex:1;height:6px;background:var(--panel);border-radius:3px;position:relative"><div style="position:absolute;left:${Math.min(100,lo*4)}%;right:${Math.max(0,100-hi*4)}%;top:0;bottom:0;background:linear-gradient(90deg,var(--cyan),var(--amber));border-radius:3px"></div></div></div>`;
+        });
+      }
+      h+='</div>';
+    }
+
+    // ── 多模型共識：不同架構的 AI 模型是否一致 ──
+    const okModels = Object.entries(consensus.models||{}).filter(([,m])=>m.t2m&&!m.error);
+    if(okModels.length>=2){
+      const vendorIcon={'NVIDIA':'🟩','華為':'🔴','上海人工智慧實驗室':'🔵','ECMWF':'🟡'};
+      const spread = consensus.t2m_spread||[];
+      const avgSpread = spread.length? (spread.reduce((a,b)=>a+b,0)/spread.length) : 0;
+      const confColor = avgSpread<0.5?'var(--cyan)':avgSpread<1.5?'var(--amber)':'var(--orange)';
+      const confText = avgSpread<0.5?'高度一致':avgSpread<1.5?'略有分歧':'分歧較大';
+      h+=`<div style="background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px">`;
+      h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">`;
+      h+=`<div style="font-size:12px;font-weight:700">🧭 多模型共識 · ${okModels.length} 個獨立 AI</div>`;
+      h+=`<div style="font-size:10px;color:${confColor};font-weight:700">${confText}（±${avgSpread.toFixed(2)}°C）</div>`;
+      h+=`</div>`;
+      // 各模型 +6h 溫度並排比較
+      const allT = okModels.flatMap(([,m])=>m.t2m);
+      const tMin=Math.min(...allT), tMax=Math.max(...allT), tRange=Math.max(0.5,tMax-tMin);
+      okModels.forEach(([name,m])=>{
+        const icon = vendorIcon[m.vendor]||'⚪';
+        const t=m.t2m[0];
+        const pct = ((t-tMin)/tRange*100).toFixed(0);
+        h+=`<div style="display:flex;align-items:center;gap:6px;font-size:11px;margin-bottom:4px">`;
+        h+=`<span style="width:16px">${icon}</span><span style="width:50px;color:var(--muted)">${name}</span>`;
+        h+=`<div style="flex:1;height:6px;background:var(--panel);border-radius:3px;position:relative">`;
+        h+=`<div style="position:absolute;left:${pct}%;top:-3px;width:2px;height:12px;background:var(--cyan);border-radius:1px"></div></div>`;
+        h+=`<span style="width:44px;text-align:right;color:var(--fg);font-weight:700">${t.toFixed(1)}°C</span></div>`;
+      });
+      h+=`<div style="font-size:9px;color:var(--muted);margin-top:6px">模型間標準差越小＝預報越有信心；分歧代表這段時間本身較難預測</div>`;
+      h+=`</div>`;
+    }
+
+    // ── ClimateNet：熱帶氣旋 / 大氣河偵測 ──
+    const ce = (climate.events||[])[0];
+    if(ce && (ce.tc_max>0.4 || ce.ar_max>0.4)){
+      const tcHot = ce.tc_max>0.4, arHot = ce.ar_max>0.4;
+      h+=`<div style="background:linear-gradient(135deg,rgba(255,59,92,.1),rgba(13,21,38,.4));border:1px solid ${tcHot?'var(--red)':'var(--cyan)'};border-radius:14px;padding:12px;margin-bottom:12px">`;
+      h+=`<div style="font-size:12px;font-weight:700;margin-bottom:4px">🛰️ ClimateNet 深度學習偵測</div>`;
+      if(tcHot)h+=`<div style="font-size:11px;color:var(--red)">🌀 台灣周邊偵測到熱帶氣旋特徵（信心 ${(ce.tc_max*100).toFixed(0)}%，覆蓋 ${(ce.tc_frac*100).toFixed(1)}% 框內面積）</div>`;
+      if(arHot)h+=`<div style="font-size:11px;color:var(--cyan)">🌊 偵測到大氣河特徵（信心 ${(ce.ar_max*100).toFixed(0)}%）</div>`;
+      h+=`<div style="font-size:9px;color:var(--muted);margin-top:4px">語意分割模型，與颱風路徑追蹤（TCTracker）為獨立方法</div>`;
+      h+=`</div>`;
+    }
+
+    // ── 即時雨量（對照用）──
+    if(rain.station){
+      h+=`<div style="background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px">`;
+      h+=`<div style="font-size:12px;font-weight:700;margin-bottom:6px">🌧️ 附近測站 <span style="color:var(--muted);font-weight:400;font-size:11px">${rain.station||''} ${rain.town||''}</span></div>`;
+      h+=`<div style="display:flex;gap:8px;font-size:11px;color:var(--muted)"><span>1h <b style="color:var(--cyan);font-size:14px">${rain.rain_1hr||0}</b></span><span>3h <b style="color:var(--cyan);font-size:14px">${rain.rain_3hr||0}</b></span><span>24h <b style="color:var(--cyan);font-size:14px">${rain.rain_24hr||0}</b></span></div>`;
+      h+=`</div>`;
+    }
+
+    // ── 信任感：模型來源 ──
+    h+=`<div style="background:linear-gradient(135deg,rgba(0,229,255,.08),rgba(13,21,38,.4));border:1px solid var(--cyan);border-radius:14px;padding:14px;margin-bottom:12px">`;
+    h+=`<div style="font-size:13px;font-weight:700;color:var(--cyan);margin-bottom:6px">🤖 NVIDIA Earth-2 · 2km 即時運算</div>`;
+    h+=`<div style="font-size:11px;color:var(--muted);line-height:1.7">`;
+    h+=`模型：<b style="color:var(--fg)">FourCastNet3 + CorrDiff Taiwan</b><br>`;
+    h+=`解析度：2km × 448×448 格網 · 全台 <b style="color:var(--fg)">200,704</b> 個格子<br>`;
+    h+=`每 6 小時重新運算 · 60 步 = 15 天預報<br>`;
+    h+=`每步降尺度抽樣 10 次，給出取樣範圍（非預報不確定性）<br>`;
+    h+=`<span style="color:var(--cyan)">🏠 築未科技 GX10 本地運算 · 資料不過雲端</span>`;
+    h+=`</div></div>`;
+
+    $('weatherContent').innerHTML=h;
+  }catch(e){
+    $('weatherContent').innerHTML='<div style="padding:20px;text-align:center;color:var(--muted)">連線失敗：'+e.message+'</div>';
+  }
+}
+
+// ── 我的分頁 ──
+const COUNTIES=['臺北市','新北市','桃園市','臺中市','臺南市','高雄市','基隆市','新竹市','新竹縣','苗栗縣','彰化縣','南投縣','雲林縣','嘉義市','嘉義縣','屏東縣','宜蘭縣','花蓮縣','臺東縣','澎湖縣','金門縣','連江縣'];
+let subs=JSON.parse(localStorage.getItem('fz_subs')||'[]');
+function renderSubs(){
+  const g=$('subGrid'); g.innerHTML='';
+  COUNTIES.forEach(c=>{
+    const b=document.createElement('button');
+    b.textContent=c;
+    b.style.cssText=`padding:7px 12px;border-radius:18px;font-size:12px;border:1px solid ${subs.includes(c)?'var(--cyan)':'var(--line)'};background:${subs.includes(c)?'rgba(0,229,255,.12)':'var(--panel2)'};color:${subs.includes(c)?'var(--cyan)':'var(--muted)'}`;
+    b.onclick=()=>{if(subs.includes(c))subs=subs.filter(x=>x!==c);else subs.push(c);localStorage.setItem('fz_subs',JSON.stringify(subs));renderSubs()};
+    g.appendChild(b);
+  });
+}
+function openMe(){
+  document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('on'));
+  document.querySelector('#nav button[data-tab=me]').classList.add('on');
+  $('overlay').classList.add('show');$('meSheet').style.display='block';
+  renderSubs();
+  $('btnPushToggle').textContent='推播：'+(localStorage.getItem('fz_push')==='on'?'開啟':'關閉');
+  renderPushStatus();
+  renderPartners();
+  loadMyReports(); checkUpdate();
+}
+// 裝置 ID：本機產生一次、存 localStorage，讓「我的回報」能真的篩出自己提交的
+// （原本 loadMyReports 呼叫的是全台通用端點，掛「我的」標題卻顯示所有人的回報）。
+function getDeviceId(){
+  let id = localStorage.getItem('fz_device_id');
+  if(!id){ id = 'dev-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10); localStorage.setItem('fz_device_id', id); }
+  return id;
+}
+// ── 聯名推廣單位 ────────────────────────────────────────────
+// 要新增廠商，只要在這個陣列裡加一筆就好，不必動下面的版面程式碼。
+//   name : 顯示名稱（必填）
+//   desc : 一行說明（選填）
+//   url  : 點擊前往的網址（選填；沒填就不可點）
+//   logo : 圖片路徑或 emoji（選填；沒填會用名稱第一個字）
+//   tag  : 右上角標籤，例如「贊助」「技術夥伴」（選填）
+const PARTNERS = [
+  // 範例（要上線時把註解拿掉並改成真實資料）：
+  // { name:'某某企業', desc:'提供災區物資運輸支援', url:'https://example.com',
+  //   logo:'icons/partner-abc.png', tag:'贊助' },
+];
+
+function renderPartners(){
+  const box = document.getElementById('partnerList');
+  if(!box) return;
+  if(!PARTNERS.length){
+    box.innerHTML = `<div style="background:var(--panel2);border:1px dashed var(--line);border-radius:12px;padding:14px;font-size:12px;color:var(--muted);line-height:1.7">
+      目前尚無聯名單位。<br>
+      <span style="font-size:11px">有意合作推廣防災資訊的單位，歡迎透過「更多內容・建議回饋」與我們聯繫。</span>
+    </div>`;
+    return;
+  }
+  box.innerHTML = PARTNERS.map(p=>{
+    const isImg = p.logo && /\.(png|jpg|jpeg|svg|webp)$/i.test(p.logo);
+    const logo = isImg
+      ? `<img src="${p.logo}" alt="" style="width:38px;height:38px;border-radius:9px;object-fit:contain;background:var(--panel);flex-shrink:0" onerror="this.replaceWith(Object.assign(document.createElement('div'),{textContent:'${(p.name||'?').slice(0,1)}',style:'width:38px;height:38px;border-radius:9px;background:var(--panel);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0'}))">`
+      : `<div style="width:38px;height:38px;border-radius:9px;background:var(--panel);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${p.logo || (p.name||'?').slice(0,1)}</div>`;
+    const tag = p.tag ? `<span style="font-size:10px;color:var(--cyan);border:1px solid var(--cyan);border-radius:6px;padding:1px 6px;margin-left:6px">${p.tag}</span>` : '';
+    const inner = `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px">
+        ${logo}
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700;color:var(--fg)">${p.name||''}${tag}</div>
+          ${p.desc?`<div style="font-size:11px;color:var(--muted);margin-top:2px">${p.desc}</div>`:''}
+        </div>
+        ${p.url?'<span style="color:var(--cyan);font-size:12px;flex-shrink:0">→</span>':''}
+      </div>`;
+    const style = 'display:block;text-decoration:none;background:var(--panel2);border:1px solid var(--line);border-radius:12px;margin-bottom:8px';
+    return p.url
+      ? `<a href="${p.url}" target="_blank" rel="noopener" style="${style}">${inner}</a>`
+      : `<div style="${style}">${inner}</div>`;
+  }).join('');
+}
+
+async function loadMyReports(){
+  try{
+    const r=await(await _fetch(API+'/api/v1/reports/mine?device_id='+encodeURIComponent(getDeviceId()))).json();
+    if(!r.length){ $('myReports').innerHTML='你還沒有回報過災情'; return; }
+    $('myReports').innerHTML = r.map(x=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)"><span>${x.type_label||x.type}${x.address?' · '+x.address:''}</span><span style="color:var(--cyan)">${x.status_label||x.status}</span></div>`).join('');
+  }catch(e){$('myReports').textContent='連線失敗'}
+}
+$('btnPushToggle').onclick=()=>{const c=localStorage.getItem('fz_push')==='on'?'off':'on';localStorage.setItem('fz_push',c);$('btnPushToggle').textContent='推播：'+(c==='on'?'開啟':'關閉');renderPushStatus();if(c==='on')initPush();toast(c==='on'?'🔔 推播已開啟':'🔕 推播已關閉')};
+$('btnMeClose').onclick=backToMap;
+
+// ── 軟體更新檢查 ──
+async function checkUpdate(auto=false){
+  const box=$('updateBox');
+  if(!auto) box.querySelector('.desc').textContent='檢查更新中…';
+  try{
+    const _c=new AbortController(); const _t=setTimeout(()=>_c.abort(),12000);
+    const r=await(await fetch(API+'/api/v1/app/version',{cache:'no-store',signal:_c.signal})).json();
+    clearTimeout(_t);
+    if(r.latest && r.version && r.version!==APP_VERSION){
+      box.querySelector('.ver').textContent=`築雲預警 v${r.version} — 有新版本！`;
+      box.querySelector('.desc').textContent=r.notes||'點擊下載更新';
+      const btn=box.querySelector('#btnCheckUpdate');
+      btn.textContent='下載更新';
+      btn.onclick=()=>downloadAndInstall(r.download_url||API+'/api/v1/app/apk');
+      // 自動模式：啟動時偵測到新版，只提示、不自動下載。
+      // 曾經在這裡直接觸發下載——如果版本字串忘了同步（真的發生過），
+      // 就會變成每次開 App 都自動重下載安裝檔。改成通知使用者自己決定。
+      if(auto){
+        toast('🔔 有新版本 v'+r.version+'，到「我的」分頁更新');
+      }
+    }else{
+      box.querySelector('.desc').textContent='✅ 已是最新版本';
+    }
+  }catch(e){
+    if(!auto) box.querySelector('.desc').textContent='⚠️ 無法連接更新伺服器';
+  }
+}
+
+// 下載 APK 並跳系統安裝畫面（用 AppLauncher 觸發原生 Intent）
+async function downloadAndInstall(url){
+  try{
+    if(window.Capacitor?.Plugins?.AppLauncher){
+      // Capacitor 原生：openUrl 會讓系統處理 APK（下載 + 安裝）
+      const { AppLauncher } = window.Capacitor.Plugins;
+      const can = await AppLauncher.canOpenUrl({url});
+      if(can.value){
+        await AppLauncher.openUrl({url});
+        toast('⬇️ 已開啟下載，請在系統畫面完成安裝');
+        return;
+      }
+    }
+    // 兜底：WebView / PWA 用 window.open
+    window.open(url, '_blank');
+    toast('⬇️ 已開啟下載頁面');
+  }catch(e){
+    window.open(url, '_blank');
+  }
+}
+$('btnCheckUpdate').onclick=()=>checkUpdate(false);
+$('btnFeedback').onclick=()=>{window.open('https://www.threads.com/@faint34556','_blank')};
+
+// ── 功能引導（首次開啟）──
+const OB_PAGES=5;
+let obIdx=0;
+function initOnboard(){
+  if(localStorage.getItem('fz_onboarded')==='1')return;
+  const ob=$('onboard'); ob.style.display='flex';
+  $('onboardPages').style.display='block';
+  // 建進度點
+  const dots=$('obDots'); dots.innerHTML='';
+  for(let i=0;i<OB_PAGES;i++){
+    const d=document.createElement('div');
+    d.style.cssText=`width:${i===0?'24px':'8px'};height:8px;border-radius:4px;background:${i===0?'var(--cyan)':'var(--line)'};transition:.25s`;
+    dots.appendChild(d);
+  }
+  showObPage(0);
+}
+function showObPage(i){
+  document.querySelectorAll('.ob-page').forEach((p,idx)=>{
+    p.style.display = idx===i ? 'block' : 'none';
+  });
+  $('obDots').querySelectorAll('div').forEach((d,idx)=>{
+    d.style.width = idx===i ? '24px' : '8px';
+    d.style.background = idx===i ? 'var(--cyan)' : 'var(--line)';
+  });
+  $('btnObNext').textContent = i===OB_PAGES-1 ? '開始使用 ✅' : '下一步';
+  obIdx=i;
+}
+$('btnObNext').onclick=()=>{
+  if(obIdx>=OB_PAGES-1){
+    localStorage.setItem('fz_onboarded','1');
+    $('onboard').style.display='none';
+    toast('✅ 歡迎使用築雲預警！');
+  }else showObPage(obIdx+1);
+};
+$('btnObSkip').onclick=()=>{localStorage.setItem('fz_onboarded','1');$('onboard').style.display='none'};
+
+// ═══ ntfy 推播訂閱（系統級通知 + 音效 + 震動）═══
+const NTFY_TOPIC='zhewei-fangzai';
+// 方案 A: ntfy.sh 公共版（wss 加密，WebView 友善）
+// 2026-08-25：改用自架 ntfy（docker 內，192.168.1.120:8090），公共伺服器實測
+// 6 小時 450 次推播被限流擋掉 380 次（84%），必須跟後端 NTFY_URL 同步換。
+const NTFY_WS='wss://ntfy.zhe-wei.net/zhewei-fangzai/ws';
+// 方案 B: 自架（.120:8090）— Android WebView cleartext ws:// 可能被擋
+// 外網用戶走 wss://ntfy.sh；內網用戶可改 wss://ntfy.sh
+let ntfyWs=null;
+const CHANNELS={
+  urgent:{id:'fz-urgent',name:'緊急災害',importance:5,sound:'alarm'},
+  high:{id:'fz-high',name:'警戒災害',importance:4,sound:'alert'},
+  default:{id:'fz-default',name:'災害示警',importance:3,sound:'notification'},
+  low:{id:'fz-info',name:'資訊通知',importance:1,sound:'gentle'}
+};
+async function setupChannels(){
+  try{
+    const NB = window.Capacitor?.Plugins?.NotifyBridge;
+    if(!NB){console.warn('NotifyBridge plugin 不可用');return null}
+    return NB;
+  }catch(e){console.warn('NotifyBridge 不可用',e);return null}
+}
+let LN=null;
+setupChannels().then(x=>LN=x);
+function prioKey(p){return p>=5?'urgent':p>=4?'high':p>=3?'default':'low'}
+function showSysNotify(title,msg,priority){
+  const k=prioKey(priority);
+  if(LN){
+    LN.notify({title:title.slice(0,40),body:msg.slice(0,100),id:Math.floor(Date.now()%1000000),channelId:CHANNELS[k].id,vibrate:priority>=4});
+  }
+  showToast(`${title}: ${msg}`,priority>=4);
+}
+function initNtfy(){
+  if(localStorage.getItem('fz_push')==='off')return;
+  try{
+    ntfyWs=new WebSocket(NTFY_WS);
+    ntfyWs.onmessage=ev=>{
+      try{
+        const d=JSON.parse(ev.data);
+        if(d.event==='message'){
+          const title=d.title||'築雲預警';
+          const msg=d.message||'';
+          const p=d.priority||3;
+          showSysNotify(title,msg,p);
+          if(p>=4 && navigator.vibrate) navigator.vibrate([200,100,200,100,200]);
+        }
+      }catch(e){}
+    };
+    ntfyWs.onclose=()=>{setTimeout(()=>{if(localStorage.getItem('fz_push')!=='off')initNtfy()},5000)};
+    ntfyWs.onerror=()=>{try{ntfyWs.close()}catch(e){}};
+  }catch(e){console.warn('ntfy 連線失敗',e)}
+}
+function showToast(msg,urgent){
+  let t=document.createElement('div');
+  t.textContent=msg;
+  t.style.cssText=`position:fixed;left:8px;right:8px;top:calc(env(safe-area-inset-top) + 50px);z-index:2000;background:${urgent?'rgba(255,59,92,.95)':'#0d1526'};border:1px solid ${urgent?'#ff3b5c':'var(--line)'};color:#fff;padding:14px 16px;border-radius:14px;font-size:13px;box-shadow:0 6px 24px rgba(0,0,0,.5);animation:slideDown .3s`;
+  if(!document.getElementById('slideAnim')){
+    const s=document.createElement('style');
+    s.id='slideAnim';s.textContent='@keyframes slideDown{from{transform:translateY(-20px);opacity:0}to{transform:translateY(0);opacity:1}}';
+    document.head.appendChild(s);
+  }
+  document.body.appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';t.style.transition='.3s';setTimeout(()=>t.remove(),300)},urgent?5000:3000);
+}
+
+// ── FCM 推播（App 被殺/背景也能收）──
+async function sendFcmToken(token){
+  try{
+    // 後端有「只推播給附近的人」的邏輯（PushDevice.lat/lon + 半徑篩選），
+    // 但這裡原本只送 token 和 user_name，座標永遠是 NULL——實機查資料庫
+    // 8 個裝置全部 (None, None)，等於這個設計從來沒生效過，所有災害通知
+    // 都是全台廣播。位置優先序：目前定位 → 上次快取的 GPS → 不送（後端
+    // 對未知位置的裝置維持全部推播，向後相容）。
+    let pos = (typeof myPos !== 'undefined' && myPos) ? myPos : null;
+    if(!pos){
+      try{ const c = JSON.parse(localStorage.getItem('fz_gps_cache')||'null');
+           if(c && c.lat) pos = [c.lat, c.lon]; }catch(e){}
+    }
+    const body = {token: token, user_name: 'android'};
+    if(pos){ body.lat = pos[0]; body.lon = pos[1]; }
+    await fetchJSON(API+'/api/v1/push/register', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(body)
+    }, 10000);
+    if(pos) localStorage.setItem('fz_fcm_token', token);
+    console.log('FCM token 已上傳' + (pos ? '（含位置）' : '（尚無位置）'));
+  }catch(e){console.warn('FCM token 上傳失敗', e)}
+}
+
+// 定位拿到之後，把位置補回推播註冊——否則第一次註冊時還沒定位成功的裝置
+// 會永遠停在「位置未知」，收到全台廣播。
+async function refreshPushLocation(){
+  const token = localStorage.getItem('fz_fcm_token');
+  if(!token || typeof myPos === 'undefined' || !myPos) return;
+  try{
+    await fetchJSON(API+'/api/v1/push/register', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({token: token, user_name:'android',
+                           lat: myPos[0], lon: myPos[1]})
+    }, 10000);
+  }catch(e){}
+}
+async function initFcm(){
+  try{
+    const PN = window.Capacitor?.Plugins?.PushNotifications;
+    if(!PN){console.warn('PushNotifications 不可用');return false}
+    let p = await PN.checkPermissions();
+    if(p.receive !== 'granted') p = await PN.requestPermissions();
+    if(p.receive !== 'granted'){console.warn('通知權限未授予');return false}
+
+    PN.addListener('pushNotificationReceived', (n)=>{
+      // 前景收到 → 用 NotifyBridge 顯示自訂音效/分級通知
+      const title = n.title || (n.data && n.data.title) || '築雲預警';
+      const body = n.body || (n.data && n.data.body) || '';
+      const prio = (n.data && n.data.priority) ? parseInt(n.data.priority,10) : 3;
+      showSysNotify(title, body, prio);
+    });
+    PN.addListener('pushNotificationActionPerformed', (a)=>{
+      const url = a.notification && a.notification.data && a.notification.data.url;
+      if(url){ window.open(url, '_self'); } else { location.reload(); }
+    });
+
+    // 原本這裡呼叫完 PN.register() 就直接回傳 true——但 register() 只代表
+    // 「註冊請求送出了」，不代表真的拿到 token。實機實測（Pixel 10 Pro Fold）
+    // 抓到：Firebase 專案設定有問題時會無限重試（logcat 一直跳 FcmRetry
+    // alarm），永遠拿不到 token，但這裡照樣回傳 true，UI 顯示「✅ 推播管道：
+    // FCM」——使用者以為收得到災害通知，其實完全收不到，這對防災 App 是
+    // 不能接受的謊報。改成真的等 registration/registrationError 其中一個
+    // 事件發生，10 秒逾時當作失敗（落回 ntfy 兜底，不自欺欺人）。
+    const ok = await new Promise((resolve)=>{
+      let done = false;
+      const finish = (v)=>{ if(done) return; done = true; resolve(v); };
+      PN.addListener('registration', (t)=>{ if(t && t.value){ sendFcmToken(t.value); finish(true); } });
+      PN.addListener('registrationError', (e)=>{ console.error('FCM 註冊失敗', e); finish(false); });
+      PN.register().catch(()=>finish(false));
+      setTimeout(()=>finish(false), 10000);
+    });
+    if(ok) console.log('FCM 已註冊（已收到 token）');
+    else console.warn('FCM 註冊逾時或失敗，改用 ntfy 兜底');
+    return ok;
+  }catch(e){console.warn('FCM init 失敗', e); return false}
+}
+
+// 啟動推播：FCM 優先（Android App）；無 FCM 時走 ntfy WebSocket 兜底（網頁/PWA）
+// 修正：原本 fz_push==='off' 只 gate 住 ntfy 路徑，FCM 路徑無條件觸發，
+// 使用者關閉推播開關後 FCM 裝置仍會繼續收到通知。
+window._pushChannel = 'unknown';
+function renderPushStatus(){
+  const el=document.getElementById('pushChannel'), it=document.getElementById('pushItems');
+  if(!el) return;
+  const off = localStorage.getItem('fz_push')==='off';
+  const M = {fcm:['✅ 推播管道：FCM（Android 原生通知）','var(--cyan)'],
+             ntfy:['✅ 推播管道：ntfy（網頁/PWA 兜底）','var(--cyan)'],
+             none:['⚠️ 推播管道：都連不上，你不會收到通知','var(--red)'],
+             unknown:['推播管道：偵測中…','var(--muted)']};
+  const [txt,col] = off ? ['🔕 推播已關閉（你不會收到任何通知）','var(--muted)']
+                        : (M[window._pushChannel]||M.unknown);
+  el.textContent=txt; el.style.color=col;
+  // 只有真的收得到，才列出「會收到什麼」
+  if(it) it.innerHTML = (!off && (window._pushChannel==='fcm'||window._pushChannel==='ntfy'))
+    ? '<span style="color:var(--cyan)">項目：災害示警・道路封閉・淹水警戒・SOS 附近求救・AI 預報豪雨</span>'
+    : '';
+}
+async function initPush(){
+  if(localStorage.getItem('fz_push')==='off'){ window._pushChannel='off'; renderPushStatus(); return; }
+  let ok = false;
+  try{ ok = await initFcm(); }catch(e){ ok = false; }
+  if(ok){ window._pushChannel='fcm'; }
+  else {
+    try{ initNtfy(); window._pushChannel='ntfy'; }
+    catch(e){ window._pushChannel='none'; }
+  }
+  renderPushStatus();
+}
+initPush();
+initOnboard();
+
+// ── 載入前授權請求（定位 + 通知）──
+// App 啟動時先取得關鍵權限，避免功能用到一半才跳系統授權視窗。
+async function requestPermissions(){
+  const granted = {location:false, notification:false};
+
+  // ① 定位權限（Capacitor Geolocation 或原生）
+  try{
+    if(window.Capacitor?.Plugins?.Geolocation){
+      const perm = await Capacitor.Plugins.Geolocation.requestPermissions();
+      granted.location = (perm?.location==='granted' || perm?.location==='prompt-with-rationale');
+    } else if(navigator.geolocation){
+      // 網頁版：觸發一次定位即會請求授權
+      await new Promise(res=>{
+        navigator.geolocation.getCurrentPosition(()=>{granted.location=true;res()}, ()=>{res()}, {timeout:5000});
+      });
+    }
+  }catch(e){}
+
+  // ② 通知權限（Android 13+ 需 POST_NOTIFICATIONS，用 Capacitor PushNotifications；網頁版用 Notification API）
+  try{
+    const PN = window.Capacitor?.Plugins?.PushNotifications;
+    if(PN && typeof PN.requestPermissions === 'function'){
+      let p = null;
+      try{ p = await PN.checkPermissions(); }catch(e){}
+      if(p && p.receive !== 'granted'){ try{ p = await PN.requestPermissions(); }catch(e){} }
+      granted.notification = (p?.receive === 'granted');
+    } else if('Notification' in window && Notification.permission==='default'){
+      const p = await Notification.requestPermission();
+      granted.notification = (p==='granted');
+    } else if('Notification' in window && Notification.permission==='granted'){
+      granted.notification = true;
+    }
+  }catch(e){}
+
+  // 授權結果：定位成功就主動 locate，通知失敗只在 console 提示（不阻擋使用）
+  if(granted.location){ locate(); }
+  return granted;
+}
+
+// 授權請求已在啟動流程（loadReports 前）呼叫，此處不再重複
+
+// 啟動時自動檢查更新（靜默，有新版才提示）
+setTimeout(()=>checkUpdate(true), 3000);
+
+
+
+// ── CCTV 即時影像播放器 ──
+let cctvRefreshTimer=null;
+window.openCCTV=function(url){
+  if(!url)return;
+  const ov=$('cctvOverlay'); ov.style.display='flex';
+  $('cctvImg').src=url+'?t='+Date.now();
+  $('cctvTitle').textContent='📹 CCTV 即時影像';
+  if(cctvRefreshTimer)clearInterval(cctvRefreshTimer);
+  cctvRefreshTimer=setInterval(()=>{ $('cctvImg').src=url+'?t='+Date.now(); },10000);
+};
+// 放大 AI 偵測的那一幀（靜態 base64，不做 10 秒輪播）
+window.enlargeFrame=function(){
+  if(!cctvAiFrame)return;   // cctvAiFrame 現在是圖片網址或 data: URI
+  const ov=$('cctvOverlay'); ov.style.display='flex';
+  if(cctvRefreshTimer){clearInterval(cctvRefreshTimer);cctvRefreshTimer=null;}
+  $('cctvImg').src=cctvAiFrame;
+  $('cctvTitle').textContent='🔎 AI 偵測畫面';
+};
+$('btnCctvClose').onclick=()=>{$('cctvOverlay').style.display='none';if(cctvRefreshTimer)clearInterval(cctvRefreshTimer)};
+
+</script>
+</body>
+</html>

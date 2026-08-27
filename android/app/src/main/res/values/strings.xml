@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">築雲預警</string>
+    <string name="title_activity_main">築雲預警</string>
+    <string name="package_name">net.zhewei.fangzai</string>
+    <string name="custom_url_scheme">net.zhewei.fangzai</string>
+</resources>

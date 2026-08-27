@@ -1,0 +1,19 @@
+# 依賴 / 建置產物
+node_modules/
+dist/
+*.apk
+*.aab
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/captures/
+.gradle/
+*.log
+
+# Firebase 服務帳戶「私鑰」（敏感，勿入版本控制）
+*firebase-adminsdk*.json
+*tbdp-66fbc*.json
+
+# 環境 / 本機設定
+.env

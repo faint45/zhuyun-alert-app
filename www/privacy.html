@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>隱私權政策 · 築雲預警</title>
+<style>
+  :root{--bg:#060a14;--panel:#0d1526;--fg:#e8f0ff;--muted:#8aa0c8;--cyan:#00e5ff;--amber:#ffb300;--red:#ff3b5c;--line:#1f2c47}
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--fg);font-family:"Noto Sans TC","PingFang TC",sans-serif;line-height:1.8;margin:0;padding:24px 18px 60px;max-width:760px;margin-inline:auto}
+  h1{font-size:22px;margin:0 0 6px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:28px}
+  h2{font-size:17px;color:var(--cyan);margin:32px 0 10px;border-top:1px solid var(--line);padding-top:20px}
+  h2:first-of-type{border-top:none;padding-top:0}
+  p,li{font-size:14px;color:var(--fg)}
+  .muted{color:var(--muted)}
+  .box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:12px 0}
+  .warn{border-color:var(--amber);background:rgba(255,179,0,.08)}
+  .danger{border-color:var(--red);background:rgba(255,59,92,.08)}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin:10px 0}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:600;width:26%}
+  code{background:var(--panel);padding:2px 6px;border-radius:4px;font-size:12px}
+  a{color:var(--cyan)}
+</style>
+</head>
+<body>
+
+<h1>隱私權政策</h1>
+<div class="sub">築雲預警（net.zhewei.fangzai） · 生效日期：2026年8月26日</div>
+
+<p>築雲預警是一個開放給全台使用者免費使用的災防社群 App。這份文件用白話文說明我們收集什麼資料、為什麼收集、誰看得到、以及你可以怎麼處理自己的資料。我們只寫這個 App 實際會做的事，不做超出實作範圍的承諾。</p>
+
+<h2>一、我們收集哪些資料</h2>
+<table>
+<tr><th>資料類型</th><td>用途 · 觸發時機</td></tr>
+<tr><th>位置（GPS）</th><td>查詢你所在地的天氣預報與災害預警、送出災情回報或求救時附上座標、地圖上尋找附近的 CCTV。只在你使用相關功能時才會取用，不會在背景持續追蹤。</td></tr>
+<tr><th>回報內容</th><td>你選擇送出的災情類型、文字描述、照片（相機拍攝或相簿選取）。</td></tr>
+<tr><th>求救內容</th><td>求救訊息文字、聯絡電話（選填）、GPS 座標（若拿得到）。</td></tr>
+<tr><th>裝置識別碼</th><td>App 第一次啟動時在你的手機本機隨機產生一組 ID（不是手機序號、不是廣告 ID），用來：防止同一裝置短時間內大量送出回報/求救（防濫用限流）、讓你在「我的回報」看到自己送過的紀錄。這組 ID 與你的真實身分無關，我們也沒有登入系統可以把它對應到你是誰。</td></tr>
+<tr><th>推播權杖</th><td>若你的裝置支援且你同意，我們會取得一組 FCM 推播權杖以便發送災害通知；若你曾提供位置，通知會依距離篩選，避免全台使用者收到跟自己無關的警報。</td></tr>
+</table>
+
+<div class="box">
+<b>我們不會做的事：</b>沒有帳號註冊、沒有信箱或密碼、不會要求實名、不會置入廣告或第三方追蹤 SDK、不會出售或交換你的資料給任何商業第三方。
+</div>
+
+<h2>二、誰看得到你的資料 — 請務必先讀這段</h2>
+<div class="box danger">
+<b>⚠️ 災情回報與求救求助內容是公開的。</b>這是一個群眾協力的防災 App，你送出的回報（含照片）與求救（含你留下的聯絡電話），會顯示在所有使用者都看得到的地圖上，讓附近的人能夠即時協助或查看。<b>請不要在回報或求救訊息裡填入你不希望被陌生人看到的資訊。</b>如果你在求救時填了聯絡電話，那組電話號碼會被其他使用者看到，這是讓救援者能主動聯絡你的必要設計，但也代表它不是私密資料。
+</div>
+<p>你上傳的照片會存放在我們的伺服器上，並且透過一個公開網址提供瀏覽（沒有帳號驗證機制）——只要有這個網址的人就能看到照片內容。</p>
+
+<h2>三、資料儲存在哪裡</h2>
+<p>所有資料儲存在築未科技自行維運的伺服器（位於台灣），不會上傳到第三方雲端服務商的資料庫。天氣與地圖資料的運算（包含 AI 預報模型）也是在同一批自有硬體上執行。</p>
+
+<h2>四、地圖與外部資料來源</h2>
+<p>App 內的地圖圖磚（底圖）由以下第三方提供，你的裝置會直接向它們發出請求以顯示地圖畫面，這代表你的 IP 位址會被這些服務看到（這是所有地圖類 App 的標準運作方式，不是我們額外蒐集的資料）：</p>
+<ul>
+<li>國土測繪中心（NLSC）電子地圖圖磚</li>
+<li>Esri ArcGIS 衛星影像圖磚</li>
+<li>中央氣象署（CWA）衛星雲圖影像</li>
+</ul>
+<p>交通事件與 CCTV 影像連結來自交通部 TDX 運輸資料流通服務平台；官方災害示警來自國家災害防救科技中心（NCDR）。這些都是政府公開資料，不涉及你個人資料的傳輸。</p>
+
+<h2>五、資料保留多久</h2>
+<div class="box warn">
+<b>目前沒有自動刪除機制。</b>回報、求救紀錄與上傳的照片會留在伺服器上，直到我們人工清除為止。如果你希望刪除自己送出的資料，請透過下方聯絡方式告訴我們，我們會盡力手動處理，但目前無法承諾特定的處理時限。
+</div>
+
+<h2>六、求救資料的備援</h2>
+<p>當我們的主要伺服器暫時無法連線時（例如颱風期間網路異常），求救請求可能會透過獨立的備援服務（Cloudflare）暫存，待主伺服器恢復後才會併入正式紀錄。備援服務只保存求救當下的必要資訊（座標、訊息、聯絡方式），最長保存 7 天。</p>
+
+<h2>七、你的權利</h2>
+<ul>
+<li>App 不需要帳號即可使用大部分功能，你隨時可以直接刪除 App 停止使用，本機儲存的裝置 ID、GPS 快取等資料會隨之清除。</li>
+<li>你可以要求我們刪除你送出的特定回報、求救紀錄或照片——請在聯絡我們時盡量附上送出時間、地點或內容片段，方便我們找到對應紀錄（我們沒有登入系統，無法用「帳號」直接查詢屬於你的資料）。</li>
+<li>你可以在手機系統設定裡隨時關閉定位權限或通知權限，App 的其他功能仍可使用，但依位置的預警與推播會停止運作。</li>
+</ul>
+
+<h2>八、兒童隱私</h2>
+<p>本 App 不是特別為兒童設計，也不會刻意鎖定兒童使用者。若你未滿 13 歲，請在家長或監護人的陪同下使用求救與回報功能。</p>
+
+<h2>九、政策異動</h2>
+<p>若這份政策有重大變更（例如新增資料蒐集項目），我們會更新這個頁面上方的生效日期，並盡可能在 App 內告知。</p>
+
+<h2>十、聯絡我們</h2>
+<div class="box">
+如果你對這份政策有疑問，或想要求刪除自己的資料，請寄信到：<br>
+<code>privacy@zhe-wei.net</code>
+<div class="muted" style="margin-top:8px;font-size:12px">（築未科技尚未設定此信箱前，請改用 App 內「我的」分頁提供的其他聯絡方式）</div>
+</div>
+
+</body>
+</html>
