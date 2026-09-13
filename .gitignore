@@ -17,3 +17,6 @@ android/captures/
 
 # 環境 / 本機設定
 .env
+
+# 簽章密碼
+android/keystore.properties

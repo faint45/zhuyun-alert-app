@@ -18,10 +18,17 @@ android {
     }
     signingConfigs {
         release {
-            storeFile file('../../keystore/zhewei-release.keystore')
-            storePassword 'Zhewei2026!'
-            keyAlias 'zhewei'
-            keyPassword 'Zhewei2026!'
+            // 簽章密碼不進版控：讀 android/keystore.properties（已列入 .gitignore）。
+            // 自行建置時請建立該檔：storeFile / storePassword / keyAlias / keyPassword。
+            def ksProps = new Properties()
+            def ksFile = rootProject.file('keystore.properties')
+            if (ksFile.exists()) {
+                ksFile.withInputStream { ksProps.load(it) }
+                storeFile file(ksProps['storeFile'])
+                storePassword ksProps['storePassword']
+                keyAlias ksProps['keyAlias']
+                keyPassword ksProps['keyPassword']
+            }
         }
     }
     buildTypes {
